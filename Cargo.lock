@@ -392,6 +392,7 @@ dependencies = [
  "iced-x86",
  "image",
  "imgui",
+ "imgui-filedialog",
  "imgui-glium-renderer",
  "imgui-winit-support",
  "libc",
@@ -708,6 +709,26 @@ dependencies = [
  "bitflags",
  "imgui-sys",
  "parking_lot",
+]
+
+[[package]]
+name = "imgui-filedialog"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "06136a5eff2a6472a34874c4bbb23efd95e72082c9b6236bca49790829f3806f"
+dependencies = [
+ "imgui",
+ "imgui-filedialog-sys",
+]
+
+[[package]]
+name = "imgui-filedialog-sys"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "65f96c60fe2d73c59d5719528d13f491d7edb959ddadf35658d620132f4486b2"
+dependencies = [
+ "cc",
+ "imgui-sys",
 ]
 
 [[package]]
