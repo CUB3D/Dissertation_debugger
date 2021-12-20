@@ -1,4 +1,5 @@
 #![feature(seek_stream_len)]
+#![feature(new_uninit)]
 
 use std::collections::HashMap;
 use iced_x86::{Decoder, DecoderOptions, Formatter, Instruction, IntelFormatter, SymbolResolver, SymbolResult};
@@ -15,6 +16,7 @@ pub mod elf;
 pub mod ui;
 pub mod debugging_info;
 pub mod debugger_ui;
+pub mod debugging_client;
 
 enum Msg {
     Start,
@@ -89,130 +91,7 @@ fn main() {
     let (send_from_debug, rec_from_debug) = std::sync::mpsc::channel();
     let (sender, reciever) = std::sync::mpsc::channel();
 
-    std::thread::spawn(move || {
-        let mut debugger =
-            Ptrace::new(&binary, "Debuggee", "").expect("Failed to start process under ptrace");
 
-        let msg = reciever.recv().expect("failed to get msg");
-        match msg {
-            Msg::Start => {
-                let child = debugger.inital_spawn_child();
-
-                let mut local_debugger_state = debugger_ui::DebuggerState::default();
-
-                // let mut bp = Breakpoint::new(0x00005555555551b8);
-                // bp.install(child);
-
-                send_from_debug
-                    .send(DebuggerMsg::ProcessSpwn(child))
-                    .expect("Send proc");
-
-                child.ptrace_singlestep();
-
-                let mut is_singlestep = false;
-                let mut in_syscall = false;
-
-                loop {
-                    let status = child.wait_for();
-
-                    if status.wifstopped() {
-                        let stopsig = status.wstopsig();
-                        if stopsig == (libc::SIGTRAP | 0x80) {
-                            if !in_syscall {
-                                send_from_debug.send(DebuggerMsg::SyscallTrap {
-                                    user_regs: child.ptrace_getregs(),
-                                    fp_regs: child.ptrace_getfpregs(),
-                                })
-                                    .expect("Faeild to send from debug");
-                            } else {
-                                child.ptrace_syscall();
-                                in_syscall = false;
-                                continue;
-                            }
-                            in_syscall = !in_syscall;
-                            // println!("syscall");
-                        } else if stopsig == libc::SIGTRAP {
-                            // println!("sigtrap");
-                            let event = status.0 >> 16;
-
-                            let mut regs = child.ptrace_getregs();
-
-                            if event == 0 {
-                                // We know we didnt hit a syscall but we might have hit a manual breakpoint, check if we hit a 0xcc
-                                if child.ptrace_peektext(regs.ip as usize - 1)
-                                    & 0xFF
-                                    == 0xCC
-                                {
-                                    println!(
-                                        "Hit a breakpoint @ 0x{:x} ::: {:X}",
-                                        regs.ip,
-                                        child.ptrace_peektext(
-                                            regs.ip as usize - 1
-                                        )
-                                    );
-                                    let bp = local_debugger_state.breakpoints.iter_mut().find(|bp| bp.address == regs.ip as usize - 1).expect("Hit a breakpoint, but we can't find it to uninstall");
-                                    bp.uninstall(child);
-                                    // Go back to the start of the original instruction so it actually gets executed
-                                    unsafe { libc::ptrace(libc::PTRACE_POKEUSER, child, 8 * libc::RIP, regs.ip - 1) };
-                                    regs.ip -= 1;
-
-                                    //TODO: Testing, we shouldnt step after removing the bp so that the state can be seen before the bp
-                                    // child.ptr/ace_singlestep();
-                                    // child.wait_for();
-                                    // bp.install(child);
-                                    // TODO: Testing
-
-                                    send_from_debug
-                                        .send(DebuggerMsg::BPTrap {
-                                            user_regs: regs,
-                                            fp_regs: child.ptrace_getfpregs(),
-                                            breakpoint: *bp,
-                                        })
-                                        .expect("Faeild to send from debug");
-                                } else {
-                                    send_from_debug
-                                        .send(DebuggerMsg::Trap {
-                                            user_regs: regs,
-                                            fp_regs: child.ptrace_getfpregs(),
-                                        })
-                                        .expect("Faeild to send from debug");
-                                }
-                            }
-                        }
-                    }
-
-                    loop {
-                        match reciever.recv().expect("No continue") {
-                            Msg::Continue => break,
-                            Msg::SingleStep(s) => is_singlestep = s,
-                            Msg::AddBreakpoint(bp) => {
-                                local_debugger_state.breakpoints.push(bp);
-                                let bp = local_debugger_state.breakpoints.last_mut().unwrap();
-                                let success = bp.install(child);
-                                println!("Installed bp at {:?}, success: {}", bp, success);
-                            },
-                            Msg::DoSingleStep => {
-                                child.ptrace_singlestep();
-                                child.wait_for();
-                            }
-                            Msg::InstallBreakpoint { address } => {
-                                let bp = local_debugger_state.breakpoints.iter_mut().find(|bp| bp.address == address).expect("Attempt to install breakpoint that has not been added");
-                                bp.install(child);
-                            }
-                            _ => panic!("unexpected msg"),
-                        }
-                    }
-
-                    if is_singlestep {
-                        child.ptrace_singlestep();
-                    } else {
-                        child.ptrace_syscall();
-                    }
-                }
-            }
-            _ => {}
-        }
-    });
     let mut auto_stp = false;
     let mut single_step_mode = false;
     let mut started = false;
@@ -236,42 +115,42 @@ fn main() {
                 DebuggerMsg::SyscallTrap { user_regs, fp_regs } => {
                     let proc = debugger_state.process.expect("Got syscalltrap without a process????????");
 
-                    let syscall_desc = match user_regs.orig_ax as libc::c_long {
-                        libc::SYS_brk => format!("brk({})", user_regs.di),
-                        libc::SYS_arch_prctl => format!("SYS_arch_prctl({})", user_regs.di),
-                        libc::SYS_mmap => format!("SYS_mmap(?)"),
-                        libc::SYS_access => format!("SYS_access(?)"),
-                        libc::SYS_newfstatat => format!("SYS_newfstatat(?)"),
-                        libc::SYS_mprotect => format!("SYS_mprotect(?)"),
-                        libc::SYS_write => format!("SYS_write(?)"),
-                        libc::SYS_read => format!("SYS_read(?)"),
-                        libc::SYS_munmap => format!("SYS_munmap(?)"),
-                        libc::SYS_exit_group => format!("SYS_exit_group(?)"),
-                        libc::SYS_pread64 => format!("SYS_pread64(?)"),
-
-                        libc::SYS_close => {
-                            format!("close({})", user_regs.di)
-                        }
-                        libc::SYS_openat => {
-                            let fd_name = match user_regs.di as i32 {
-                                -100 => "AT_FDCWD".to_string(),
-                                _ => format!("{}", user_regs.di),
-                            };
-
-                            // let str_arg = if user_regs.si < 0x6FFFFFFFFFFF {
-                            //     println!("Reading {:X}", user_regs.si);
-                            //     unsafe { ptrace::ptrace_read_string(proc.0, user_regs.si as i64) }
-                            // } else {
-                            //     format!("0x{:X}", user_regs.si)
-                            // };
-
-                            let str_arg = format!("0x{:X}", user_regs.si);
-                            format!("openat({}, {}, ?)", fd_name, str_arg)
-                        }
-                        _ => format!("Unknown({})", user_regs.orig_ax),
-                    };
-
-                    debugger_state.syscall_list.push(syscall_desc);
+                    // let syscall_desc = match user_regs.orig_ax as libc::c_long {
+                    //     libc::SYS_brk => format!("brk({})", user_regs.di),
+                    //     libc::SYS_arch_prctl => format!("SYS_arch_prctl({})", user_regs.di),
+                    //     libc::SYS_mmap => format!("SYS_mmap(?)"),
+                    //     libc::SYS_access => format!("SYS_access(?)"),
+                    //     libc::SYS_newfstatat => format!("SYS_newfstatat(?)"),
+                    //     libc::SYS_mprotect => format!("SYS_mprotect(?)"),
+                    //     libc::SYS_write => format!("SYS_write(?)"),
+                    //     libc::SYS_read => format!("SYS_read(?)"),
+                    //     libc::SYS_munmap => format!("SYS_munmap(?)"),
+                    //     libc::SYS_exit_group => format!("SYS_exit_group(?)"),
+                    //     libc::SYS_pread64 => format!("SYS_pread64(?)"),
+                    //
+                    //     libc::SYS_close => {
+                    //         format!("close({})", user_regs.di)
+                    //     }
+                    //     libc::SYS_openat => {
+                    //         let fd_name = match user_regs.di as i32 {
+                    //             -100 => "AT_FDCWD".to_string(),
+                    //             _ => format!("{}", user_regs.di),
+                    //         };
+                    //
+                    //         // let str_arg = if user_regs.si < 0x6FFFFFFFFFFF {
+                    //         //     println!("Reading {:X}", user_regs.si);
+                    //         //     unsafe { ptrace::ptrace_read_string(proc.0, user_regs.si as i64) }
+                    //         // } else {
+                    //         //     format!("0x{:X}", user_regs.si)
+                    //         // };
+                    //
+                    //         let str_arg = format!("0x{:X}", user_regs.si);
+                    //         format!("openat({}, {}, ?)", fd_name, str_arg)
+                    //     }
+                    //     _ => format!("Unknown({})", user_regs.orig_ax),
+                    // };
+                    //
+                    // debugger_state.syscall_list.push(syscall_desc);
                     debugger_state.cache_user_regs = Some(user_regs);
                     if auto_stp {
                         sender.send(Msg::Continue);
