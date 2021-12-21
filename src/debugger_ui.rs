@@ -1,5 +1,6 @@
 use imgui::{im_str, Ui, Window};
 use imgui::sys::igBeginMainMenuBar;
+use imgui_filedialog::FileDialog;
 use libc::stat;
 use ptrace::{Breakpoint, Process};
 use crate::debugger_ui::breakpoints::WidgetBreakpoints;
@@ -20,13 +21,24 @@ pub struct DebuggerState {
     pub elf: Option<Elf>,
 }
 
-#[derive(Default)]
 pub struct DebuggerUi {
+    fd: FileDialog,
     mmap: WidgetMemoryMap,
     syscalls: WidgetSyscallList,
     registers: WidgetRegisters,
     elf_info: WidgetElfInfo,
     breakpoints: WidgetBreakpoints,
+}
+
+impl Default for DebuggerUi {
+    fn default() -> Self {
+        Self {
+            fd: imgui_filedialog::FileDialog::create("Test"),
+            mmap: Default::default(),
+            syscalls: Default::default(),
+            registers: Default::default(),
+        }
+    }
 }
 
 impl DebuggerUi {
@@ -39,12 +51,34 @@ impl DebuggerUi {
             self.breakpoints.as_uimenu(),
         ];
 
+        let fd = &mut self.fd;
         ui.main_menu_bar(|| {
+            ui.menu(im_str!("File"), true, || {
+                if ui.small_button(im_str!("Open")) {
+                    fd.open_modal();
+                }
+            });
            ui.menu(im_str!("View"), true, || {
                for menu in &mut menus {
                    ui.checkbox(menu.title(), menu.visible_mut());
                }
            });
+        });
+        if fd.display() {
+            println!("Browsing folder {:?}", fd.current_path());
+            if fd.is_ok() {
+                println!("Open file {:?}", fd.selection().unwrap().files().first().unwrap())
+            }
+            fd.close();
+        }
+        Window::new(im_str!("Breakpoints")).build(ui, || {
+            for (index, bp) in state.breakpoints.clone().iter().enumerate() {
+                ui.text(im_str!("0x{:X}", bp.address));
+                ui.same_line(50.);
+                if ui.small_button(im_str!("X")) {
+                    state.breakpoints.remove(index);
+                }
+            }
         });
 
         for menu in menus {
