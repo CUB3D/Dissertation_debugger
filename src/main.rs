@@ -219,7 +219,6 @@ fn main() {
     let mut current_breakpoint: Option<Breakpoint> = None;
 
     let mut window_stack = false;
-    let mut window_info = false;
 
     let mut debugger_ui = debugger_ui::DebuggerUi::default();
     let mut debugger_state = debugger_ui::DebuggerState::default();
@@ -296,16 +295,6 @@ fn main() {
             }
             sender.send(Msg::Continue).expect("Failed to send msg");
         };
-
-        if window_info {
-            Window::new(im_str!("Info")).build(ui, || {
-                ui.text(im_str!("Entry point: 0x{:X}", elf_parsed.entry_point));
-                ui.text(im_str!("Section count: 0x{:X}", elf_parsed.sections.len()));
-                if let Some(p) = debugger_state.process {
-                    ui.text(im_str!("proc: {}", p.0));
-                }
-            });
-        }
 
         Window::new(im_str!("Controls")).build(ui, || {
             if ui.small_button(im_str!("|>")) {

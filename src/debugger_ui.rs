@@ -2,10 +2,13 @@ use imgui::{im_str, Ui, Window};
 use imgui::sys::igBeginMainMenuBar;
 use libc::stat;
 use ptrace::{Breakpoint, Process};
+use crate::debugger_ui::breakpoints::WidgetBreakpoints;
+use crate::debugger_ui::elf_info::WidgetElfInfo;
 use crate::debugger_ui::mmap::WidgetMemoryMap;
 use crate::debugger_ui::registers::WidgetRegisters;
 use crate::debugger_ui::syscall::WidgetSyscallList;
 use crate::debugger_ui::widget::{UiMenu};
+use crate::elf::Elf;
 
 //TODO: move
 #[derive(Default, Clone)]
@@ -14,6 +17,7 @@ pub struct DebuggerState {
     pub breakpoints: Vec<Breakpoint>,
     pub process: Option<Process>,
     pub cache_user_regs: Option<Box<ptrace::UserRegs>>,
+    pub elf: Option<Elf>,
 }
 
 #[derive(Default)]
@@ -21,6 +25,8 @@ pub struct DebuggerUi {
     mmap: WidgetMemoryMap,
     syscalls: WidgetSyscallList,
     registers: WidgetRegisters,
+    elf_info: WidgetElfInfo,
+    breakpoints: WidgetBreakpoints,
 }
 
 impl DebuggerUi {
@@ -29,6 +35,8 @@ impl DebuggerUi {
             self.mmap.as_uimenu(),
             self.syscalls.as_uimenu(),
             self.registers.as_uimenu(),
+            self.elf_info.as_uimenu(),
+            self.breakpoints.as_uimenu(),
         ];
 
         ui.main_menu_bar(|| {
@@ -37,16 +45,6 @@ impl DebuggerUi {
                    ui.checkbox(menu.title(), menu.visible_mut());
                }
            });
-        });
-
-        Window::new(im_str!("Breakpoints")).build(ui, || {
-            for (index, bp) in state.breakpoints.clone().iter().enumerate() {
-                ui.text(im_str!("0x{:X}", bp.address));
-                ui.same_line(50.);
-                if ui.small_button(im_str!("X")) {
-                    state.breakpoints.remove(index);
-                }
-            }
         });
 
         for menu in menus {
@@ -63,15 +61,19 @@ mod widget {
     use crate::debugger_ui::DebuggerState;
 
     pub trait UiMenu {
-        fn render_if_visible(&mut self, state: &DebuggerState, ui: &Ui) {
+        fn render_if_visible(&mut self, state: &mut DebuggerState, ui: &Ui) {
             if *self.visible_mut() {
                 self.render(state, ui);
             }
         }
 
-        fn render(&mut self, state: &DebuggerState, ui: &Ui);
+        fn render(&mut self, state: &mut DebuggerState, ui: &Ui);
         fn visible_mut(&mut self) -> &mut bool;
         fn title(&self) -> &'static ImStr;
+    }
+
+    pub trait InnerRender {
+        fn render_inner(&mut self, state: &mut DebuggerState, ui: &Ui);
     }
 }
 
@@ -101,8 +103,8 @@ mod mmap {
     }
 
     impl UiMenu for WidgetMemoryMap {
-        fn render(&mut self, state: &DebuggerState, ui: &Ui) {
-            Window::new(im_str!("Memory Map")).build(ui, || {
+        fn render(&mut self, state: &mut DebuggerState, ui: &Ui) {
+            Window::new(self.title()).build(ui, || {
                 if let Some(proc) = state.process {
                     if let Some(mmap) = ptrace::get_memory_map(proc.0) {
                         for entry in mmap.0 {
@@ -153,8 +155,8 @@ mod syscall {
     }
 
     impl UiMenu for WidgetSyscallList {
-        fn render(&mut self, state: &DebuggerState, ui: &Ui) {
-            Window::new(im_str!("Syscall history")).build(ui, || {
+        fn render(&mut self, state: &mut DebuggerState, ui: &Ui) {
+            Window::new(self.title()).build(ui, || {
                 for line in &state.syscall_list {
                     ui.text(im_str!("{}", line));
                 }
@@ -197,8 +199,8 @@ mod registers {
     }
 
     impl UiMenu for WidgetRegisters {
-        fn render(&mut self, state: &DebuggerState, ui: &Ui) {
-            Window::new(im_str!("Registers")).build(ui, || {
+        fn render(&mut self, state: &mut DebuggerState, ui: &Ui) {
+            Window::new(self.title()).build(ui, || {
                 if let Some(user_regs) = &state.cache_user_regs {
                     ui.text(im_str!("RAX: 0x{:X} ({})", user_regs.ax, user_regs.ax));
                     ui.text(im_str!("RBX: 0x{:X} ({})", user_regs.bx, user_regs.bx));
@@ -254,3 +256,95 @@ mod registers {
         }
     }
 }
+
+
+
+    #[macro_export]
+    macro_rules! define_ui_menu {
+        ($name: ty, $title: expr) => {
+            impl $name {
+                pub fn as_uimenu(&mut self) -> &mut dyn UiMenu {
+                    self
+                }
+            }
+
+            impl UiMenu for $name {
+                fn render(&mut self, state: &mut DebuggerState, ui: &Ui) {
+                    Window::new(self.title()).build(ui, || {
+                        self.render_inner(state, ui);
+                    });
+                }
+
+                fn visible_mut(&mut self) -> &mut bool {
+                    &mut self.visible
+                }
+
+                fn title(&self) -> &'static ImStr {
+                    im_str!($title)
+                }
+            }
+        };
+    }
+
+pub mod elf_info {
+    use imgui::{im_str, ImStr, Ui, Window};
+    use libc::stat;
+    use ptrace::{MemoryMap, Process};
+    use crate::debugger_ui::{DebuggerState};
+    use crate::debugger_ui::widget::{InnerRender, UiMenu};
+
+    #[derive(Default)]
+    pub struct WidgetElfInfo {
+        pub visible: bool
+    }
+
+    define_ui_menu!(WidgetElfInfo, "Info");
+
+    impl InnerRender for WidgetElfInfo {
+        fn render_inner(&mut self, state: &mut DebuggerState, ui: &Ui) {
+            ui.text(im_str!("ELF:"));
+            if let Some(elf_parsed) = &state.elf {
+                ui.text(im_str!("Entry point: 0x{:X}", elf_parsed.entry_point));
+                ui.text(im_str!("Section count: 0x{:X}", elf_parsed.sections.len()));
+
+            } else {
+                ui.text(im_str!("No binary loaded"));
+            }
+
+            ui.text("Process:");
+            if let Some(p) = state.process {
+                ui.text(im_str!("Process id: {}", p.0));
+            } else {
+                ui.text(im_str!("Process not started"));
+            }
+        }
+    }
+}
+
+pub mod breakpoints {
+    use imgui::{im_str, ImStr, Ui, Window};
+    use libc::stat;
+    use ptrace::{MemoryMap, Process};
+    use crate::debugger_ui::{DebuggerState};
+    use crate::debugger_ui::widget::{InnerRender, UiMenu};
+
+    #[derive(Default)]
+    pub struct WidgetBreakpoints {
+        pub visible: bool
+    }
+    define_ui_menu!(WidgetBreakpoints, "Breakpoints");
+
+    impl InnerRender for WidgetBreakpoints {
+        fn render_inner(&mut self, state: &mut DebuggerState, ui: &Ui) {
+            for (index, bp) in state.breakpoints.clone().iter().enumerate() {
+                ui.text(im_str!("0x{:X}", bp.address));
+                ui.same_line(50.);
+                if ui.small_button(im_str!("X")) {
+                    state.breakpoints.remove(index);
+                }
+            }
+        }
+    }
+}
+
+//TODO: consider making render immutable and using events to do changes to state, so we can't forget to forward messages to the debug thread
