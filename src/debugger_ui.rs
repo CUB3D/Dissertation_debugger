@@ -37,6 +37,8 @@ impl Default for DebuggerUi {
             mmap: Default::default(),
             syscalls: Default::default(),
             registers: Default::default(),
+            elf_info: Default::default(),
+            breakpoints: Default::default(),
         }
     }
 }
