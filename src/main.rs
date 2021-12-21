@@ -11,44 +11,13 @@ use std::iter::Iterator;
 use std::ops::ControlFlow::Break;
 use std::time::Duration;
 use gimli::EndianSlice;
+use debugging_client::{Msg, DebuggingClient, DebuggerMsg};
 
 pub mod elf;
 pub mod ui;
 pub mod debugging_info;
 pub mod debugger_ui;
 pub mod debugging_client;
-
-enum Msg {
-    Start,
-    Continue,
-    SingleStep(bool),
-    AddBreakpoint(Breakpoint),
-    /// Install the breakpoint that has already been added at the given address
-    InstallBreakpoint { address: usize },
-    DoSingleStep,
-}
-
-#[derive(Clone, Debug)]
-pub enum DebuggerMsg {
-    /// The child has hit a singlestep breakpoint, control returned to caller
-    Trap {
-        user_regs: Box<UserRegs>,
-        fp_regs: Box<FpRegs>,
-    },
-    /// The child has hit a int3 breakpoint, control returned to caller
-    BPTrap {
-        user_regs: Box<UserRegs>,
-        fp_regs: Box<FpRegs>,
-        breakpoint: Breakpoint,
-    },
-    /// The child has hit a syscall breakpoint, control returned to caller
-    SyscallTrap {
-        user_regs: Box<UserRegs>,
-        fp_regs: Box<FpRegs>,
-    },
-    /// The process has spawned
-    ProcessSpwn(Process),
-}
 
 
 #[derive(Default, Clone)]
@@ -88,8 +57,9 @@ fn main() {
 
     let system = ui::init("Debugger");
 
-    let (send_from_debug, rec_from_debug) = std::sync::mpsc::channel();
-    let (sender, reciever) = std::sync::mpsc::channel();
+    let mut dc = debugging_client::NativeDebuggingClient::default();
+
+    let (sender,rec_from_debug) = dc.start(binary);
 
 
     let mut auto_stp = false;
@@ -115,42 +85,42 @@ fn main() {
                 DebuggerMsg::SyscallTrap { user_regs, fp_regs } => {
                     let proc = debugger_state.process.expect("Got syscalltrap without a process????????");
 
-                    // let syscall_desc = match user_regs.orig_ax as libc::c_long {
-                    //     libc::SYS_brk => format!("brk({})", user_regs.di),
-                    //     libc::SYS_arch_prctl => format!("SYS_arch_prctl({})", user_regs.di),
-                    //     libc::SYS_mmap => format!("SYS_mmap(?)"),
-                    //     libc::SYS_access => format!("SYS_access(?)"),
-                    //     libc::SYS_newfstatat => format!("SYS_newfstatat(?)"),
-                    //     libc::SYS_mprotect => format!("SYS_mprotect(?)"),
-                    //     libc::SYS_write => format!("SYS_write(?)"),
-                    //     libc::SYS_read => format!("SYS_read(?)"),
-                    //     libc::SYS_munmap => format!("SYS_munmap(?)"),
-                    //     libc::SYS_exit_group => format!("SYS_exit_group(?)"),
-                    //     libc::SYS_pread64 => format!("SYS_pread64(?)"),
-                    //
-                    //     libc::SYS_close => {
-                    //         format!("close({})", user_regs.di)
-                    //     }
-                    //     libc::SYS_openat => {
-                    //         let fd_name = match user_regs.di as i32 {
-                    //             -100 => "AT_FDCWD".to_string(),
-                    //             _ => format!("{}", user_regs.di),
-                    //         };
-                    //
-                    //         // let str_arg = if user_regs.si < 0x6FFFFFFFFFFF {
-                    //         //     println!("Reading {:X}", user_regs.si);
-                    //         //     unsafe { ptrace::ptrace_read_string(proc.0, user_regs.si as i64) }
-                    //         // } else {
-                    //         //     format!("0x{:X}", user_regs.si)
-                    //         // };
-                    //
-                    //         let str_arg = format!("0x{:X}", user_regs.si);
-                    //         format!("openat({}, {}, ?)", fd_name, str_arg)
-                    //     }
-                    //     _ => format!("Unknown({})", user_regs.orig_ax),
-                    // };
-                    //
-                    // debugger_state.syscall_list.push(syscall_desc);
+                    let syscall_desc = match user_regs.orig_ax as libc::c_long {
+                        libc::SYS_brk => format!("brk({})", user_regs.di),
+                        libc::SYS_arch_prctl => format!("SYS_arch_prctl({})", user_regs.di),
+                        libc::SYS_mmap => format!("SYS_mmap(?)"),
+                        libc::SYS_access => format!("SYS_access(?)"),
+                        libc::SYS_newfstatat => format!("SYS_newfstatat(?)"),
+                        libc::SYS_mprotect => format!("SYS_mprotect(?)"),
+                        libc::SYS_write => format!("SYS_write(?)"),
+                        libc::SYS_read => format!("SYS_read(?)"),
+                        libc::SYS_munmap => format!("SYS_munmap(?)"),
+                        libc::SYS_exit_group => format!("SYS_exit_group(?)"),
+                        libc::SYS_pread64 => format!("SYS_pread64(?)"),
+
+                        libc::SYS_close => {
+                            format!("close({})", user_regs.di)
+                        }
+                        libc::SYS_openat => {
+                            let fd_name = match user_regs.di as i32 {
+                                -100 => "AT_FDCWD".to_string(),
+                                _ => format!("{}", user_regs.di),
+                            };
+
+                            // let str_arg = if user_regs.si < 0x6FFFFFFFFFFF {
+                            //     println!("Reading {:X}", user_regs.si);
+                            //     unsafe { ptrace::ptrace_read_string(proc.0, user_regs.si as i64) }
+                            // } else {
+                            //     format!("0x{:X}", user_regs.si)
+                            // };
+
+                            let str_arg = format!("0x{:X}", user_regs.si);
+                            format!("openat({}, {}, ?)", fd_name, str_arg)
+                        }
+                        _ => format!("Unknown({})", user_regs.orig_ax),
+                    };
+
+                    debugger_state.syscall_list.push(syscall_desc);
                     debugger_state.cache_user_regs = Some(user_regs);
                     if auto_stp {
                         sender.send(Msg::Continue);
