@@ -19,41 +19,11 @@ pub mod debugging_info;
 pub mod debugger_ui;
 pub mod debugging_client;
 
-
-#[derive(Default, Clone)]
-struct MySymbolResolver {
-    map: HashMap<u64, String>,
-}
-
-impl SymbolResolver for MySymbolResolver {
-    fn symbol(
-        &mut self, _instruction: &Instruction, _operand: u32, _instruction_operand: Option<u32>,
-        address: u64, _address_size: u32,
-    ) -> Option<SymbolResult> {
-        if let Some(symbol_string) = self.map.get(&address) {
-            // The 'address' arg is the address of the symbol and doesn't have to be identical
-            // to the 'address' arg passed to symbol(). If it's different from the input
-            // address, the formatter will add +N or -N, eg. '[rax+symbol+123]'
-            Some(SymbolResult::with_str(address, symbol_string.as_str()))
-        } else {
-            None
-        }
-    }
-}
-
 fn main() {
     let binary = std::env::args().nth(1).expect("No binary provided");
-    let load_address = 0x555555554000;
     println!("Loading {}", binary);
     let mut binary_content = std::fs::read(&binary).expect("Failed to read binary");
     let elf_parsed = elf::parse(&mut Cursor::new(binary_content)).expect("Failed to parse elf");
-
-    let subprograms = debugging_info::parse_dwarf_info(&elf_parsed).subprograms;
-
-    let mut resolver = Box::new(MySymbolResolver::default());
-    for prog in &subprograms {
-        resolver.map.insert(prog.start_addr + load_address, prog.name.clone());
-    }
 
     let system = ui::init("Debugger");
 
@@ -67,10 +37,9 @@ fn main() {
     let mut started = false;
     let mut current_breakpoint: Option<Breakpoint> = None;
 
-    let mut window_stack = false;
-
     let mut debugger_ui = debugger_ui::DebuggerUi::default();
     let mut debugger_state = debugger_ui::DebuggerState::default();
+    debugger_state.elf = Some(elf_parsed);
 
     system.main_loop(move |_, ui| {
         if let Ok(msg) = rec_from_debug.recv_timeout(Duration::from_nanos(1)) {
@@ -169,121 +138,6 @@ fn main() {
                 }
             }
         });
-
-        if started {
-            Window::new(im_str!("Decode")).build(ui, || {
-                if let Some(user_regs) = &debugger_state.cache_user_regs {
-                    // The address that the process is loaded into memory at
-                    let base_address = load_address + elf_parsed.entry_point;
-                    //TODO: just use memory directly, no elf parse+handle self modifing
-                    //TODO: ip should be ip of instruction 0
-
-                    let init = elf_parsed.by_name(".init").expect("Failed to get .init");
-                    let plt = elf_parsed.by_name(".plt").expect("Failed to get .plt");
-                    let text = elf_parsed.by_name(".text").expect("Failed to get .text");
-                    let fini = elf_parsed.by_name(".fini").expect("Failed to get .fini");
-
-                    let sections = [init, plt, text, fini];
-
-                    for text in &sections {
-                        ui.text(im_str!("{}:", text.name));
-                        let mut decoder = Decoder::with_ip(
-                            64,
-                            &text.data,
-                            load_address + text.addr,
-                            DecoderOptions::NONE,
-                        );
-                        let mut instruction = Instruction::default();
-                        let mut formatter = IntelFormatter::with_options(Some(resolver.clone()), None);
-                        let mut output = String::new();
-
-                        for ii in 0..0x8000 {
-                            if decoder.can_decode() {
-                                decoder.decode_out(&mut instruction);
-
-                                output.clear();
-                                formatter.format(&instruction, &mut output);
-
-                                if let Some(sub) = subprograms.iter().find(|s| s.start_addr == (instruction.ip() - load_address)) {
-                                    ui.text(im_str!("<{}>: ", sub.name))
-                                }
-
-
-                                let token = if instruction.ip() == user_regs.ip {
-                                    let token = ui.push_style_color(StyleColor::Text, [0.0, 1.0, 0.0, 1.0]);
-                                    // ui.text_colored(
-                                    //     [0.0, 1.0, 0.0, 1.0],
-                                    //     im_str!("{:016X} {}", instruction.ip(), output),
-                                    // );
-                                    ui.set_scroll_here_y();
-                                    Some(token)
-                                } else {
-                                    None
-                                };
-
-                                let bp = debugger_state.breakpoints.iter().find(|bp| bp.address == instruction.ip() as usize);
-                                let bp_text = if bp.is_some() {
-                                    "B "
-                                } else {
-                                    "  "
-                                };
-
-                                if ui.small_button(&im_str!("{}{:016X} {}", bp_text, instruction.ip(), output)) {
-                                    if let Some(pos) = debugger_state.breakpoints.iter().position(|bp| bp.address == instruction.ip() as usize) {
-                                        debugger_state.breakpoints.remove(pos);
-                                    } else {
-                                        let bp = Breakpoint::new(instruction.ip() as usize);
-                                        debugger_state.breakpoints.push(bp);
-                                        sender.send(Msg::AddBreakpoint(bp));
-                                    }
-                                }
-
-                                if let Some(token) = token {
-                                    token.pop(ui);
-                                }
-                            } else {
-                                break;
-                            }
-                        }
-                    }
-                }
-            });
-
-            if window_stack {
-                Window::new(im_str!("Stack")).build(ui, || {
-                    if let Some(process) = debugger_state.process {
-                        if let Some(mmap) = ptrace::get_memory_map(process.0) {
-                            let stack_section = mmap
-                                .0
-                                .iter()
-                                .find(|m| m.path.contains("[stack]"))
-                                .expect("Failed to find stack");
-                            let mut mem_file =
-                                std::fs::File::open(format!("/proc/{}/mem", process.0))
-                                    .expect("No mem?");
-                            let mut mem =
-                                vec![0u8; stack_section.range.end - stack_section.range.start];
-                            mem_file
-                                .seek(SeekFrom::Start(stack_section.range.start as u64))
-                                .expect("Seek failed");
-                            mem_file
-                                .read_exact(&mut mem)
-                                .expect("Failed to read memory range");
-
-                            ui.columns(9, im_str!("mem"), true);
-                            for (line_num, line) in mem.chunks(8).enumerate() {
-                                ui.text(im_str!("{:X}", stack_section.range.start + line_num * 8));
-                                ui.next_column();
-                                for byte in line {
-                                    ui.text(im_str!("{:2X}", byte));
-                                    ui.next_column();
-                                }
-                            }
-                        }
-                    }
-                });
-            }
-        }
         debugger_ui.render(ui, &mut debugger_state);
     });
 }
