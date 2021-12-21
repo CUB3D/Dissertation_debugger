@@ -2,7 +2,7 @@ use std::error::Error;
 use std::io;
 use std::io::{Cursor, Read, Seek, SeekFrom};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Elf {
     pub entry_point: u64,
     pub sections: Vec<Section>,
