@@ -19,10 +19,10 @@ pub fn parse_dwarf_info(elf_parsed: &Elf) -> DebuggingInfo {
     let mut subprograms = vec![];
     let dwarf = gimli::read::Dwarf::load(|id: gimli::SectionId| -> Result<std::borrow::Cow<[u8]>, gimli::Error> {
         if let Some(buf) = elf_parsed.by_name(id.name()) {
-            println!("Loading {:?}", id.name());
+            // println!("Loading {:?}", id.name());
             return Ok(std::borrow::Cow::Owned(buf.data.clone()));
         } else {
-            println!("Cant find {:?}", id.name());
+            // println!("Cant find {:?}", id.name());
             return Ok(std::borrow::Cow::Borrowed(&[][..]));
         }
     });
@@ -102,12 +102,10 @@ pub fn parse_dwarf_info(elf_parsed: &Elf) -> DebuggingInfo {
     }
 
 
-    println!("dyn");
     if let Some(section) = elf_parsed.by_name(".rela.dyn") {
         crate::elf::parse_rela(&mut Cursor::new(section.data), &elf_parsed);
     }
 
-    println!("plt");
     if let Some(section) = elf_parsed.by_name(".rela.plt") {
         let rela = crate::elf::parse_rela(&mut Cursor::new(section.data), &elf_parsed).expect("failed to read rela.plt");
         for r in &rela {
@@ -120,7 +118,7 @@ pub fn parse_dwarf_info(elf_parsed: &Elf) -> DebuggingInfo {
         }
     }
 
-    println!("Found subroutines, {:?}", subprograms);
+    // println!("Found subroutines, {:?}", subprograms);
 
 
     // println!("symtab");
