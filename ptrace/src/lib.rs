@@ -45,6 +45,14 @@ pub enum MemoryMapEntryPermissionsKind {
     Private,
     Shared
 }
+impl core::fmt::Display for MemoryMapEntryPermissionsKind {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Private => write!(f, "private"),
+            Shared => write!(f, "shared"),
+        }
+    }
+}
 #[derive(Copy, Clone, Debug)]
 pub struct MemoryMapEntryPermissions {
     pub read: bool,
