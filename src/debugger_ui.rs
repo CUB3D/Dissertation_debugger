@@ -1,9 +1,13 @@
+use std::io::Cursor;
+use std::sync::mpsc::{Receiver, Sender};
+use std::time::Duration;
 use imgui::{im_str, Ui, Window};
 use imgui::sys::igBeginMainMenuBar;
 use imgui_filedialog::FileDialog;
 use libc::stat;
 use ptrace::{Breakpoint, Process};
 use crate::debugger_ui::breakpoints::WidgetBreakpoints;
+use crate::debugger_ui::controls::WidgetControls;
 use crate::debugger_ui::dissassemble::WidgetDisassemble;
 use crate::debugger_ui::elf_info::WidgetElfInfo;
 use crate::debugger_ui::mmap::WidgetMemoryMap;
@@ -11,16 +15,104 @@ use crate::debugger_ui::registers::WidgetRegisters;
 use crate::debugger_ui::stack::WidgetStack;
 use crate::debugger_ui::syscall::WidgetSyscallList;
 use crate::debugger_ui::widget::{UiMenu};
+use crate::{debugger_ui, DebuggerMsg, DebuggingClient, elf, Msg, ui};
+use crate::debugging_client::NativeDebuggingClient;
 use crate::elf::Elf;
 
 //TODO: move
-#[derive(Default, Clone)]
+#[derive(Default)]
 pub struct DebuggerState {
     pub syscall_list: Vec<String>,
     pub breakpoints: Vec<Breakpoint>,
     pub process: Option<Process>,
     pub cache_user_regs: Option<Box<ptrace::UserRegs>>,
     pub elf: Option<Elf>,
+    pub auto_stp: bool,
+    pub single_step_mode: bool,
+    pub started: bool,
+    pub current_breakpoint: Option<Breakpoint>,
+    //TODO: group these three together, if we have one we should have all
+    pub sender: Option<Sender<Msg>>,
+    pub reciever: Option<Receiver<DebuggerMsg>>,
+    pub client: Option<NativeDebuggingClient>,
+}
+
+impl DebuggerState {
+    pub fn load_binary(&mut self, binary: &str) {
+        let mut binary_content = std::fs::read(&binary).expect("Failed to read binary");
+        let elf_parsed = elf::parse(&mut Cursor::new(binary_content)).expect("Failed to parse elf");
+        self.elf = Some(elf_parsed);
+
+        self.client = Some(NativeDebuggingClient::default());
+        let (sender,reciever) = self.client.as_mut().unwrap().start(&binary);
+        self.sender = Some(sender);
+        self.reciever = Some(reciever);
+    }
+
+    pub fn process_incoming_message(&mut self) {
+        if let Ok(msg) = self.reciever.as_ref().unwrap().recv_timeout(Duration::from_nanos(1)) {
+            match msg {
+                DebuggerMsg::Trap { user_regs, fp_regs } => {
+                    self.cache_user_regs = Some(user_regs);
+                    if self.auto_stp {
+                        self.sender.as_ref().unwrap().send(Msg::Continue);
+                    }
+                }
+                DebuggerMsg::SyscallTrap { user_regs, fp_regs } => {
+                    let proc = self.process.expect("Got syscalltrap without a process????????");
+
+                    let syscall_desc = match user_regs.orig_ax as libc::c_long {
+                        libc::SYS_brk => format!("brk({})", user_regs.di),
+                        libc::SYS_arch_prctl => format!("SYS_arch_prctl({})", user_regs.di),
+                        libc::SYS_mmap => format!("SYS_mmap(?)"),
+                        libc::SYS_access => format!("SYS_access(?)"),
+                        libc::SYS_newfstatat => format!("SYS_newfstatat(?)"),
+                        libc::SYS_mprotect => format!("SYS_mprotect(?)"),
+                        libc::SYS_write => format!("SYS_write(?)"),
+                        libc::SYS_read => format!("SYS_read(?)"),
+                        libc::SYS_munmap => format!("SYS_munmap(?)"),
+                        libc::SYS_exit_group => format!("SYS_exit_group(?)"),
+                        libc::SYS_pread64 => format!("SYS_pread64(?)"),
+
+                        libc::SYS_close => {
+                            format!("close({})", user_regs.di)
+                        }
+                        libc::SYS_openat => {
+                            let fd_name = match user_regs.di as i32 {
+                                -100 => "AT_FDCWD".to_string(),
+                                _ => format!("{}", user_regs.di),
+                            };
+
+                            // let str_arg = if user_regs.si < 0x6FFFFFFFFFFF {
+                            //     println!("Reading {:X}", user_regs.si);
+                            //     unsafe { ptrace::ptrace_read_string(proc.0, user_regs.si as i64) }
+                            // } else {
+                            //     format!("0x{:X}", user_regs.si)
+                            // };
+
+                            let str_arg = format!("0x{:X}", user_regs.si);
+                            format!("openat({}, {}, ?)", fd_name, str_arg)
+                        }
+                        _ => format!("Unknown({})", user_regs.orig_ax),
+                    };
+
+                    self.syscall_list.push(syscall_desc);
+                    self.cache_user_regs = Some(user_regs);
+                    if self.auto_stp {
+                        self.sender.as_ref().unwrap().send(Msg::Continue);
+                    }
+                }
+                DebuggerMsg::BPTrap { user_regs, fp_regs, breakpoint } => {
+                    // int3 never auto continues
+                    self.cache_user_regs = Some(user_regs);
+                    self.current_breakpoint = Some(breakpoint);
+                }
+                DebuggerMsg::ProcessSpwn(p) => {
+                    self.process = Some(p);
+                }
+            }
+        }
+    }
 }
 
 pub struct DebuggerUi {
@@ -32,6 +124,7 @@ pub struct DebuggerUi {
     breakpoints: WidgetBreakpoints,
     stack: WidgetStack,
     dissassemble: WidgetDisassemble,
+    controls: WidgetControls,
 }
 
 impl Default for DebuggerUi {
@@ -45,6 +138,7 @@ impl Default for DebuggerUi {
             breakpoints: Default::default(),
             stack: Default::default(),
             dissassemble: Default::default(),
+            controls: Default::default(),
         }
     }
 }
@@ -59,6 +153,7 @@ impl DebuggerUi {
             self.breakpoints.as_uimenu(),
             self.stack.as_uimenu(),
             self.dissassemble.as_uimenu(),
+            self.controls.as_uimenu(),
         ];
 
         let fd = &mut self.fd;
@@ -77,6 +172,8 @@ impl DebuggerUi {
         if fd.display() {
             println!("Browsing folder {:?}", fd.current_path());
             if fd.is_ok() {
+                //TODO: no lossy string here
+                state.load_binary(&fd.selection().unwrap().files().first().unwrap().to_string_lossy());
                 println!("Open file {:?}", fd.selection().unwrap().files().first().unwrap())
             }
             fd.close();
@@ -94,6 +191,17 @@ impl DebuggerUi {
         for menu in menus {
             menu.render_if_visible(state, ui);
         }
+    }
+    pub fn init(mut debugger_state: DebuggerState) {
+        let system = crate::ui::init("Debugger");
+        let mut debugger_ui = debugger_ui::DebuggerUi::default();
+
+        system.main_loop(move |_, ui| {
+            if debugger_state.client.is_some() {
+                debugger_state.process_incoming_message();
+            }
+            debugger_ui.render(ui, &mut debugger_state);
+        });
     }
 }
 
@@ -556,7 +664,7 @@ pub mod dissassemble {
                                     } else {
                                         let bp = Breakpoint::new(instruction.ip() as usize);
                                         state.breakpoints.push(bp);
-                                        // sender.send(Msg::AddBreakpoint(bp));
+                                        state.sender.as_ref().unwrap().send(Msg::AddBreakpoint(bp));
                                     }
                                 }
 
@@ -568,6 +676,59 @@ pub mod dissassemble {
                             }
                         }
                     }
+                }
+            }
+        }
+    }
+}
+
+pub mod controls {
+    use std::io::{Read, Seek, SeekFrom};
+    use crate::debugger_ui::breakpoints::WidgetBreakpoints;
+    use crate::debugger_ui::DebuggerState;
+    use imgui::{im_str, ImStr, Ui, Window};
+    use libc::stat;
+    use ptrace::{MemoryMap, Process};
+    use crate::debugger_ui::widget::{InnerRender, UiMenu};
+    use crate::Msg;
+
+    #[derive(Default)]
+    pub struct WidgetControls {
+        pub visible: bool
+    }
+    define_ui_menu!(WidgetControls, "Controls");
+
+    impl InnerRender for WidgetControls {
+        fn render_inner(&mut self, state: &mut DebuggerState, ui: &Ui) {
+            let mut send_continue = || {
+                if let Some(bp) = state.current_breakpoint {
+                    state.sender.as_ref().unwrap().send(Msg::DoSingleStep).expect("Failed to send msg");
+                    state.sender.as_ref().unwrap().send(Msg::InstallBreakpoint { address: bp.address }).expect("Failed to send msg");
+                    state.current_breakpoint = None;
+                }
+                state.sender.as_ref().unwrap().send(Msg::Continue).expect("Failed to send msg");
+            };
+
+            if ui.small_button(im_str!("|>")) {
+                state.sender.as_ref().unwrap().send(Msg::Start).expect("Failed to send msg");
+                state.started = true;
+            }
+            if state.started {
+                if ui.checkbox(im_str!("Auto step"), &mut state.auto_stp) {
+                    if state.auto_stp {
+                        send_continue();
+                    }
+                }
+                if !state.auto_stp {
+                    if ui.small_button(im_str!("Step")) {
+                        send_continue();
+                    }
+                }
+
+                if ui.checkbox(im_str!("Single step mode"), &mut state.single_step_mode) {
+                    state.sender.as_ref().unwrap()
+                        .send(Msg::SingleStep(state.single_step_mode))
+                        .expect("Failed to send msg");
                 }
             }
         }
