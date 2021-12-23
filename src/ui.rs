@@ -3,7 +3,7 @@ use glium::glutin::event::{Event, WindowEvent};
 use glium::glutin::event_loop::{ControlFlow, EventLoop};
 use glium::glutin::window::WindowBuilder;
 use glium::{Display, Surface};
-use imgui::{Context, FontConfig, FontSource, Ui};
+use imgui::{Context, FontConfig, FontGlyphRanges, FontSource, Ui};
 use imgui_glium_renderer::Renderer;
 use imgui_winit_support::{HiDpiMode, WinitPlatform};
 use std::path::{Path, PathBuf};
@@ -20,11 +20,11 @@ pub mod clipboard {
     }
 
     impl ClipboardBackend for ClipboardSupport {
-        fn get(&mut self) -> Option<ImString> {
+        fn get(&mut self) -> Option<String> {
             self.0.get_contents().ok().map(|text| text.into())
         }
-        fn set(&mut self, text: &ImStr) {
-            let _ = self.0.set_contents(text.to_str().to_owned());
+        fn set(&mut self, text: &str) {
+            let _ = self.0.set_contents(text.to_owned());
         }
     }
 }
@@ -55,7 +55,7 @@ pub fn init(title: &str) -> System {
     imgui.set_ini_filename(Some(PathBuf::from("debugger_conf.ini")));
 
     if let Some(backend) = clipboard::init() {
-        imgui.set_clipboard_backend(Box::new(backend));
+        imgui.set_clipboard_backend(backend);
     } else {
         eprintln!("Failed to initialize clipboard");
     }

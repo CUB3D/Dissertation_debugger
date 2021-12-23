@@ -10,7 +10,6 @@ use crate::debugger_ui::breakpoints::WidgetBreakpoints;
 use crate::debugger_ui::controls::WidgetControls;
 use crate::debugger_ui::dissassemble::WidgetDisassemble;
 use crate::debugger_ui::elf_info::WidgetElfInfo;
-use crate::debugger_ui::mmap::WidgetMemoryMap;
 use crate::debugger_ui::registers::WidgetRegisters;
 use crate::debugger_ui::stack::WidgetStack;
 use crate::debugger_ui::syscall::WidgetSyscallList;
@@ -18,6 +17,7 @@ use crate::debugger_ui::widget::{UiMenu};
 use crate::{debugger_ui, DebuggerMsg, DebuggingClient, elf, Msg, ui};
 use crate::debugging_client::NativeDebuggingClient;
 use crate::elf::Elf;
+use crate::memory_map::WidgetMemoryMap;
 
 //TODO: move
 #[derive(Default)]
@@ -158,12 +158,12 @@ impl DebuggerUi {
 
         let fd = &mut self.fd;
         ui.main_menu_bar(|| {
-            ui.menu(im_str!("File"), true, || {
+            ui.menu(im_str!("File"), || {
                 if ui.small_button(im_str!("Open")) {
                     fd.open_modal();
                 }
             });
-           ui.menu(im_str!("View"), true, || {
+           ui.menu(im_str!("View"), || {
                for menu in &mut menus {
                    ui.checkbox(menu.title(), menu.visible_mut());
                }
@@ -181,7 +181,7 @@ impl DebuggerUi {
         Window::new(im_str!("Breakpoints")).build(ui, || {
             for (index, bp) in state.breakpoints.clone().iter().enumerate() {
                 ui.text(im_str!("0x{:X}", bp.address));
-                ui.same_line(50.);
+                ui.same_line();
                 if ui.small_button(im_str!("X")) {
                     state.breakpoints.remove(index);
                 }
@@ -206,7 +206,7 @@ impl DebuggerUi {
 }
 
 
-mod widget {
+pub mod widget {
     use imgui::{im_str, ImStr, Ui, Window};
     use libc::stat;
     use ptrace::{MemoryMap, Process};
@@ -226,58 +226,6 @@ mod widget {
 
     pub trait InnerRender {
         fn render_inner(&mut self, state: &mut DebuggerState, ui: &Ui);
-    }
-}
-
-mod mmap {
-    use imgui::{im_str, ImStr, Ui, Window};
-    use libc::stat;
-    use ptrace::{MemoryMap, Process};
-    use crate::debugger_ui::DebuggerState;
-    use crate::debugger_ui::widget::UiMenu;
-
-    pub struct WidgetMemoryMap {
-        pub visible: bool
-    }
-
-    impl WidgetMemoryMap {
-        pub fn as_uimenu(&mut self) -> &mut dyn UiMenu {
-            self
-        }
-    }
-
-    impl Default for WidgetMemoryMap {
-        fn default() -> Self {
-            Self {
-                visible: true
-            }
-        }
-    }
-
-    impl UiMenu for WidgetMemoryMap {
-        fn render(&mut self, state: &mut DebuggerState, ui: &Ui) {
-            Window::new(self.title()).build(ui, || {
-                if let Some(proc) = state.process {
-                    if let Some(mmap) = ptrace::get_memory_map(proc.0) {
-                        for entry in mmap.0 {
-                            ui.text(im_str!("{} 0x{:X}-0x{:X} {:?}", entry.path, entry.range.start, entry.range.end, entry.permissions));
-                        }
-                    } else {
-                        ui.text(im_str!("Memory map not available"));
-                    }
-                } else {
-                    ui.text(im_str!("Process not running!"));
-                }
-            });
-        }
-
-        fn visible_mut(&mut self) -> &mut bool {
-            &mut self.visible
-        }
-
-        fn title(&self) -> &'static ImStr {
-            im_str!("Memory Map")
-        }
     }
 }
 
@@ -490,7 +438,7 @@ pub mod breakpoints {
         fn render_inner(&mut self, state: &mut DebuggerState, ui: &Ui) {
             for (index, bp) in state.breakpoints.clone().iter().enumerate() {
                 ui.text(im_str!("0x{:X}", bp.address));
-                ui.same_line(50.);
+                ui.same_line();
                 if ui.small_button(im_str!("X")) {
                     state.breakpoints.remove(index);
                 }
@@ -669,7 +617,7 @@ pub mod dissassemble {
                                 }
 
                                 if let Some(token) = token {
-                                    token.pop(ui);
+                                    token.pop();
                                 }
                             } else {
                                 break;
