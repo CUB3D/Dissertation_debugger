@@ -227,6 +227,42 @@ pub mod widget {
     pub trait InnerRender {
         fn render_inner(&mut self, state: &mut DebuggerState, ui: &Ui);
     }
+
+    use std::ffi::{CStr, CString};
+    use imgui::sys::{igBeginTable, igEndTable, igTableHeadersRow, igTableNextColumn, igTableNextRow, igTableSetupColumn, ImGuiID, ImGuiTableColumnFlags, ImGuiTableFlags, ImVec2};
+    use imgui::sys::cty::c_int;
+
+    pub struct ImGuiTableBuilder;
+
+    impl ImGuiTableBuilder {
+        pub fn with_name<S: Fn(&mut Self), T: Fn(&mut Self)>(name: CString, column_count: c_int, setup_func: S, build_func: T) {
+            if unsafe { igBeginTable(name.as_ptr(), column_count, ImGuiTableFlags::default(), ImVec2::zero(), 0.0f32) } {
+                let mut s = Self{};
+                setup_func(&mut s);
+                unsafe { igTableHeadersRow(); }
+                build_func(&mut s);
+            }
+            unsafe { igEndTable(); }
+        }
+
+        pub fn next_column(&mut self) {
+            unsafe {
+                igTableNextColumn();
+            }
+        }
+
+        pub fn next_row(&mut self) {
+            unsafe {
+                igTableNextRow(0, 0f32);
+            }
+        }
+
+        pub fn setup_column(&mut self, label: CString) {
+            unsafe {
+                igTableSetupColumn(label.as_ptr(), 0, 0f32, 0);
+            }
+        }
+    }
 }
 
 mod syscall {
@@ -380,7 +416,7 @@ mod registers {
                 }
 
                 fn title(&self) -> &'static ImStr {
-                    im_str!($title)
+                    imgui::im_str!($title)
                 }
             }
         };
@@ -640,11 +676,17 @@ pub mod controls {
     use crate::debugger_ui::widget::{InnerRender, UiMenu};
     use crate::Msg;
 
-    #[derive(Default)]
     pub struct WidgetControls {
         pub visible: bool
     }
     define_ui_menu!(WidgetControls, "Controls");
+    impl Default for WidgetControls {
+        fn default() -> Self {
+            Self {
+                visible: true,
+            }
+        }
+    }
 
     impl InnerRender for WidgetControls {
         fn render_inner(&mut self, state: &mut DebuggerState, ui: &Ui) {
