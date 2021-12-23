@@ -1,6 +1,6 @@
 use std::io::Cursor;
-use std::sync::mpsc::{Receiver, Sender};
 use std::time::Duration;
+use crossbeam_channel::{Receiver, Sender};
 use imgui::{im_str, Ui, Window};
 use imgui::sys::igBeginMainMenuBar;
 use imgui_filedialog::FileDialog;

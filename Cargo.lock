@@ -436,6 +436,7 @@ version = "0.1.0"
 dependencies = [
  "clap",
  "clipboard",
+ "crossbeam-channel",
  "fallible-iterator",
  "gimli",
  "glium",

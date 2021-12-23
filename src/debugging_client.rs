@@ -2,9 +2,10 @@
 
 pub trait DebuggingClient {
     //TODO: should this return an instance of the client
-    fn start(&mut self, binary_path: &str) -> (std::sync::mpsc::Sender<Msg>, std::sync::mpsc::Receiver<DebuggerMsg>);
+    fn start(&mut self, binary_path: &str) -> (Sender<Msg>, Receiver<DebuggerMsg>);
 }
 
+use crossbeam_channel::{Receiver, Sender};
 use ptrace::{Breakpoint, FpRegs, Process, UserRegs};
 
 #[cfg(target_os = "windows")]
@@ -60,6 +61,7 @@ pub mod linux {
     use std::iter::Iterator;
     use std::ops::ControlFlow::Break;
     use std::time::Duration;
+    use crossbeam_channel::{Receiver, Sender, unbounded};
     use gimli::EndianSlice;
     use crate::debugging_client::{DebuggerMsg, Msg};
 
@@ -67,9 +69,9 @@ pub mod linux {
     pub struct LinuxPtraceDebuggingClient {}
 
     impl DebuggingClient for LinuxPtraceDebuggingClient {
-        fn start(&mut self, binary_path: &str) -> (std::sync::mpsc::Sender<Msg>, std::sync::mpsc::Receiver<DebuggerMsg>) {
-            let (send_from_debug, rec_from_debug) = std::sync::mpsc::channel();
-            let (sender, reciever) = std::sync::mpsc::channel();
+        fn start(&mut self, binary_path: &str) -> (Sender<Msg>, Receiver<DebuggerMsg>) {
+            let (send_from_debug, rec_from_debug) = unbounded();
+            let (sender, reciever) = unbounded();
 
             // Can't send a ref to a thread
             let binary_path = binary_path.to_string();
