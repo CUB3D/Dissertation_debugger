@@ -7,19 +7,15 @@ edition = "2021"
 
 [dependencies]
 clipboard = "0.5.0"
-glium = "0.29.0"
-image ="0.23.12"
-imgui = "0.7.0"
-imgui-glium-renderer = "0.7.0"
-imgui-winit-support ="0.7.0"
-imgui-filedialog = "0.2.0"
-#include_dir = "0.6.0"
-#rodio = "0.13.0"
-#chrono = "0.4.19"
+glium = "0.30.2"
+image ="0.23.14"
+imgui = "0.8.0"
+imgui-glium-renderer = "0.8.0"
+imgui-winit-support ="0.8.0"
+imgui-filedialog = { path = "./libs_vendor/imgui-filedialog-rs" }
 
 iced-x86 = "1.15.0"
 clap = "2.34.0"
-
 gimli = "0.26.1"
 fallible-iterator = "0.2.0"
 
