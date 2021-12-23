@@ -2,7 +2,7 @@
 
 pub trait DebuggingClient {
     //TODO: should this return an instance of the client
-    fn start(&mut self, binary_path: String) -> (std::sync::mpsc::Sender<Msg>, std::sync::mpsc::Receiver<DebuggerMsg>);
+    fn start(&mut self, binary_path: &str) -> (std::sync::mpsc::Sender<Msg>, std::sync::mpsc::Receiver<DebuggerMsg>);
 }
 
 use ptrace::{Breakpoint, FpRegs, Process, UserRegs};
@@ -64,10 +64,12 @@ pub mod linux {
     pub struct LinuxPtraceDebuggingClient {}
 
     impl DebuggingClient for LinuxPtraceDebuggingClient {
-        fn start(&mut self, binary_path: String) -> (std::sync::mpsc::Sender<Msg>, std::sync::mpsc::Receiver<DebuggerMsg>) {
+        fn start(&mut self, binary_path: &str) -> (std::sync::mpsc::Sender<Msg>, std::sync::mpsc::Receiver<DebuggerMsg>) {
             let (send_from_debug, rec_from_debug) = std::sync::mpsc::channel();
             let (sender, reciever) = std::sync::mpsc::channel();
 
+            // Can't send a ref to a thread
+            let binary_path = binary_path.to_string();
             std::thread::spawn(move || {
                 let mut debugger =
                     Ptrace::new(&binary_path, "Debuggee", "").expect("Failed to start process under ptrace");
