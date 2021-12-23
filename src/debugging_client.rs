@@ -12,11 +12,14 @@ pub use win::WindowsNTDebuggingClient as NativeDebuggingClient;
 #[cfg(target_os = "linux")]
 pub use linux::LinuxPtraceDebuggingClient as NativeDebuggingClient;
 
+#[derive(Clone)]
 pub enum Msg {
     Start,
     Continue,
     SingleStep(bool),
     AddBreakpoint(Breakpoint),
+    /// Remove the breakpoint at the given address
+    RemoveBreakpoint(usize),
     /// Install the breakpoint that has already been added at the given address
     InstallBreakpoint { address: usize },
     DoSingleStep,
@@ -163,11 +166,12 @@ pub mod linux {
                             }
 
                             loop {
-                                match reciever.recv().expect("No continue") {
+                                let msg = reciever.recv().expect("No continue");
+                                local_debugger_state.apply_state_transform(msg.clone());
+                                match msg {
                                     Msg::Continue => break,
                                     Msg::SingleStep(s) => is_singlestep = s,
                                     Msg::AddBreakpoint(bp) => {
-                                        local_debugger_state.breakpoints.push(bp);
                                         let bp = local_debugger_state.breakpoints.last_mut().unwrap();
                                         let success = bp.install(child);
                                         println!("Installed bp at {:?}, success: {}", bp, success);
@@ -179,6 +183,10 @@ pub mod linux {
                                     Msg::InstallBreakpoint { address } => {
                                         let bp = local_debugger_state.breakpoints.iter_mut().find(|bp| bp.address == address).expect("Attempt to install breakpoint that has not been added");
                                         bp.install(child);
+                                    }
+                                    Msg::RemoveBreakpoint(baddr) => {
+                                        let bp = local_debugger_state.breakpoints.iter_mut().find(|bp| bp.address == baddr).expect("Attempt to remove breakpoint that has not been added");
+                                        bp.uninstall(child);
                                     }
                                     _ => panic!("unexpected msg"),
                                 }

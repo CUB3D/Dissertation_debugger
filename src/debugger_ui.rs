@@ -6,18 +6,18 @@ use imgui::sys::igBeginMainMenuBar;
 use imgui_filedialog::FileDialog;
 use libc::stat;
 use ptrace::{Breakpoint, Process};
-use crate::debugger_ui::breakpoints::WidgetBreakpoints;
 use crate::debugger_ui::controls::WidgetControls;
 use crate::debugger_ui::dissassemble::WidgetDisassemble;
 use crate::debugger_ui::elf_info::WidgetElfInfo;
-use crate::debugger_ui::registers::WidgetRegisters;
 use crate::debugger_ui::stack::WidgetStack;
 use crate::debugger_ui::syscall::WidgetSyscallList;
 use crate::debugger_ui::widget::{UiMenu};
 use crate::{debugger_ui, DebuggerMsg, DebuggingClient, elf, Msg, ui};
+use crate::breakpoints::WidgetBreakpoints;
 use crate::debugging_client::NativeDebuggingClient;
 use crate::elf::Elf;
 use crate::memory_map::WidgetMemoryMap;
+use crate::registers::WidgetRegisters;
 
 //TODO: move
 #[derive(Default)]
@@ -113,6 +113,30 @@ impl DebuggerState {
             }
         }
     }
+
+    /// Apply a message to the current state to transform it into the new state
+    /// As long as this is always called on the local state for all sent messages and on the remote state
+    /// for all recieved messages -> the two states will always remain in sync
+    pub fn apply_state_transform(&mut self, msg: Msg) {
+        match msg {
+            Msg::Start => {}
+            Msg::Continue => {}
+            Msg::SingleStep(_) => {}
+            Msg::AddBreakpoint(b) => self.breakpoints.push(b),
+            Msg::RemoveBreakpoint(baddr) => {
+                let index = self.breakpoints.iter_mut().position(|b| b.address == baddr).expect("Failed to find bp");
+                self.breakpoints.remove(index);
+            }
+            Msg::InstallBreakpoint { .. } => {}
+            Msg::DoSingleStep => {}
+        }
+    }
+
+    /// Send a message to the debugging client, while ensuring that any transforms are applied to the local state
+    pub fn send_msg(&mut self, msg: Msg) {
+        self.apply_state_transform(msg.clone());
+        self.sender.as_ref().unwrap().send(msg);
+    }
 }
 
 pub struct DebuggerUi {
@@ -178,15 +202,6 @@ impl DebuggerUi {
             }
             fd.close();
         }
-        Window::new(im_str!("Breakpoints")).build(ui, || {
-            for (index, bp) in state.breakpoints.clone().iter().enumerate() {
-                ui.text(im_str!("0x{:X}", bp.address));
-                ui.same_line();
-                if ui.small_button(im_str!("X")) {
-                    state.breakpoints.remove(index);
-                }
-            }
-        });
 
         for menu in menus {
             menu.render_if_visible(state, ui);
@@ -309,91 +324,6 @@ mod syscall {
     }
 }
 
-mod registers {
-    use imgui::{im_str, ImStr, Ui, Window};
-    use libc::stat;
-    use ptrace::{MemoryMap, Process};
-    use crate::debugger_ui::DebuggerState;
-    use crate::debugger_ui::widget::UiMenu;
-
-    pub struct WidgetRegisters {
-        pub visible: bool
-    }
-
-    impl WidgetRegisters {
-        pub fn as_uimenu(&mut self) -> &mut dyn UiMenu {
-            self
-        }
-    }
-
-    impl Default for WidgetRegisters {
-        fn default() -> Self {
-            Self {
-                visible: true
-            }
-        }
-    }
-
-    impl UiMenu for WidgetRegisters {
-        fn render(&mut self, state: &mut DebuggerState, ui: &Ui) {
-            Window::new(self.title()).build(ui, || {
-                if let Some(user_regs) = &state.cache_user_regs {
-                    ui.text(im_str!("RAX: 0x{:X} ({})", user_regs.ax, user_regs.ax));
-                    ui.text(im_str!("RBX: 0x{:X} ({})", user_regs.bx, user_regs.bx));
-                    ui.text(im_str!("RCX: 0x{:X} ({})", user_regs.cx, user_regs.cx));
-                    ui.text(im_str!("RDX: 0x{:X} ({})", user_regs.dx, user_regs.dx));
-                    ui.text(im_str!("RBP: 0x{:X} ({})", user_regs.bp, user_regs.bp));
-                    ui.text(im_str!("RSP: 0x{:X} ({})", user_regs.sp, user_regs.sp));
-                    ui.text(im_str!("RSI: 0x{:X} ({})", user_regs.si, user_regs.si));
-                    ui.text(im_str!("RDI: 0x{:X} ({})", user_regs.di, user_regs.di));
-                    ui.new_line();
-
-                    ui.text(im_str!("R8: 0x{:X} ({})", user_regs.r8, user_regs.r8));
-                    ui.text(im_str!("R9: 0x{:X} ({})", user_regs.r9, user_regs.r9));
-                    ui.text(im_str!("R10: 0x{:X} ({})", user_regs.r10, user_regs.r10));
-                    ui.text(im_str!("R11: 0x{:X} ({})", user_regs.r11, user_regs.r11));
-                    ui.text(im_str!("R12: 0x{:X} ({})", user_regs.r12, user_regs.r12));
-                    ui.text(im_str!("R12: 0x{:X} ({})", user_regs.r13, user_regs.r13));
-                    ui.text(im_str!("R14: 0x{:X} ({})", user_regs.r14, user_regs.r14));
-                    ui.text(im_str!("R15: 0x{:X} ({})", user_regs.r15, user_regs.r15));
-                    ui.new_line();
-
-                    ui.text(im_str!("RIP: 0x{:X}", user_regs.ip));
-                    ui.new_line();
-
-                    ui.text(im_str!("RFLAGS: 0x{:X}", user_regs.flags));
-                    ui.text(im_str!("CF: {}", (user_regs.flags & 0x0001) == 0x0001));
-                    ui.text(im_str!("PF: {}", (user_regs.flags & 0x0004) == 0x0004));
-                    ui.text(im_str!("AF: {}", (user_regs.flags & 0x0010) == 0x0010));
-                    ui.text(im_str!("ZF: {}", (user_regs.flags & 0x0040) == 0x0040));
-                    ui.text(im_str!("SF: {}", (user_regs.flags & 0x0080) == 0x0080));
-                    ui.text(im_str!("TF: {}", (user_regs.flags & 0x0100) == 0x0100));
-                    ui.text(im_str!("IF: {}", (user_regs.flags & 0x0200) == 0x0200));
-                    ui.text(im_str!("DF: {}", (user_regs.flags & 0x0400) == 0x0400));
-                    ui.text(im_str!("OF: {}", (user_regs.flags & 0x0800) == 0x0800));
-                    ui.new_line();
-
-                    ui.text(im_str!("GS: 0x{:X} ({})", user_regs.gs, user_regs.gs));
-                    ui.text(im_str!("FS: 0x{:X} ({})", user_regs.fs, user_regs.fs));
-                    ui.text(im_str!("ES: 0x{:X} ({})", user_regs.es, user_regs.es));
-                    ui.text(im_str!("DS: 0x{:X} ({})", user_regs.ds, user_regs.ds));
-                    ui.text(im_str!("CS: 0x{:X} ({})", user_regs.cs, user_regs.cs));
-                    ui.text(im_str!("SS: 0x{:X} ({})", user_regs.ss, user_regs.ss));
-                }
-            });
-        }
-
-        fn visible_mut(&mut self) -> &mut bool {
-            &mut self.visible
-        }
-
-        fn title(&self) -> &'static ImStr {
-            im_str!("Registers")
-        }
-    }
-}
-
-
 
     #[macro_export]
     macro_rules! define_ui_menu {
@@ -457,35 +387,8 @@ pub mod elf_info {
     }
 }
 
-pub mod breakpoints {
-    use imgui::{im_str, ImStr, Ui, Window};
-    use libc::stat;
-    use ptrace::{MemoryMap, Process};
-    use crate::debugger_ui::{DebuggerState};
-    use crate::debugger_ui::widget::{InnerRender, UiMenu};
-
-    #[derive(Default)]
-    pub struct WidgetBreakpoints {
-        pub visible: bool
-    }
-    define_ui_menu!(WidgetBreakpoints, "Breakpoints");
-
-    impl InnerRender for WidgetBreakpoints {
-        fn render_inner(&mut self, state: &mut DebuggerState, ui: &Ui) {
-            for (index, bp) in state.breakpoints.clone().iter().enumerate() {
-                ui.text(im_str!("0x{:X}", bp.address));
-                ui.same_line();
-                if ui.small_button(im_str!("X")) {
-                    state.breakpoints.remove(index);
-                }
-            }
-        }
-    }
-}
-
 pub mod stack {
     use std::io::{Read, Seek, SeekFrom};
-    use crate::debugger_ui::breakpoints::WidgetBreakpoints;
     use crate::debugger_ui::DebuggerState;
     use imgui::{im_str, ImStr, Ui, Window};
     use libc::stat;
@@ -538,7 +441,6 @@ pub mod dissassemble {
     use std::collections::HashMap;
     use std::io::{Read, Seek, SeekFrom};
     use iced_x86::{Decoder, DecoderOptions, Formatter, Instruction, IntelFormatter, SymbolResolver, SymbolResult};
-    use crate::debugger_ui::breakpoints::WidgetBreakpoints;
     use crate::debugger_ui::DebuggerState;
     use imgui::{im_str, ImStr, StyleColor, Ui, Window};
     use libc::stat;
@@ -592,12 +494,12 @@ pub mod dissassemble {
                     //TODO: just use memory directly, no elf parse+handle self modifing
                     //TODO: ip should be ip of instruction 0
 
-                    let init = elf_parsed.by_name(".init").expect("Failed to get .init");
-                    let plt = elf_parsed.by_name(".plt").expect("Failed to get .plt");
-                    let text = elf_parsed.by_name(".text").expect("Failed to get .text");
-                    let fini = elf_parsed.by_name(".fini").expect("Failed to get .fini");
+                    let init = elf_parsed.by_name(".init");
+                    let plt = elf_parsed.by_name(".plt");
+                    let text = elf_parsed.by_name(".text");
+                    let fini = elf_parsed.by_name(".fini");
 
-                    let sections = [init, plt, text, fini];
+                    let sections = [init, plt, text, fini].into_iter().filter(|f| f.is_some()).map(|f| f.unwrap()).collect::<Vec<_>>();
 
                     for text in &sections {
                         ui.text(im_str!("{}:", text.name));
@@ -668,7 +570,6 @@ pub mod dissassemble {
 
 pub mod controls {
     use std::io::{Read, Seek, SeekFrom};
-    use crate::debugger_ui::breakpoints::WidgetBreakpoints;
     use crate::debugger_ui::DebuggerState;
     use imgui::{im_str, ImStr, Ui, Window};
     use libc::stat;
