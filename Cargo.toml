@@ -18,6 +18,7 @@ iced-x86 = "1.15.0"
 clap = "2.34.0"
 gimli = "0.26.1"
 fallible-iterator = "0.2.0"
+crossbeam-channel = "0.5.1"
 
 [target.'cfg(unix)'.dependencies]
 ptrace = { path = "./ptrace", features = ["breakpoints"]}
