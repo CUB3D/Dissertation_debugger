@@ -61,19 +61,11 @@ pub mod linux {
     use crate::debugging_client::{DebuggerMsg, Msg};
     use crate::stack::{CallStack, StackFrame};
     use crossbeam_channel::{unbounded, Receiver, Sender};
-    use gimli::EndianSlice;
-    use iced_x86::{
-        Decoder, DecoderOptions, Formatter, Instruction, IntelFormatter, SymbolResolver,
-        SymbolResult,
-    };
-    use imgui::{im_str, StyleColor, Window};
-    use libc::user;
-    use ptrace::{Breakpoint, BreakpointAction, Event, FpRegs, Process, Ptrace, UserRegs};
-    use std::collections::HashMap;
-    use std::io::{Cursor, Read, Seek, SeekFrom};
+
+    use ptrace::Ptrace;
+
     use std::iter::Iterator;
-    use std::ops::ControlFlow::Break;
-    use std::time::Duration;
+
     use unwind::{Accessors, AddressSpace, Byteorder, Cursor as StackCursor, PTraceState, RegNum};
 
     #[derive(Default)]
@@ -87,7 +79,7 @@ pub mod linux {
             // Can't send a ref to a thread
             let binary_path = binary_path.to_string();
             std::thread::spawn(move || {
-                let mut debugger = Ptrace::new(&binary_path, "Debuggee", "")
+                let debugger = Ptrace::new(&binary_path, "Debuggee", "")
                     .expect("Failed to start process under ptrace");
 
                 let msg = reciever.recv().expect("failed to get msg");
@@ -262,7 +254,7 @@ pub mod linux {
                                 match msg {
                                     Msg::Continue => break,
                                     Msg::SingleStep(s) => is_singlestep = s,
-                                    Msg::AddBreakpoint(bp) => {
+                                    Msg::AddBreakpoint(_bp) => {
                                         let bp =
                                             local_debugger_state.breakpoints.last_mut().unwrap();
                                         let success = bp.install(child);

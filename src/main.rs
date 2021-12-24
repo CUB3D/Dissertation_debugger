@@ -4,18 +4,6 @@
 use crate::debugger_ui::{DebuggerState, DebuggerUi};
 use clap::{App, Arg};
 use debugging_client::{DebuggerMsg, DebuggingClient, Msg};
-use gimli::EndianSlice;
-use iced_x86::{
-    Decoder, DecoderOptions, Formatter, Instruction, IntelFormatter, SymbolResolver, SymbolResult,
-};
-use imgui::{im_str, StyleColor, Window};
-use libc::user;
-use ptrace::{Breakpoint, BreakpointAction, Event, FpRegs, Process, Ptrace, UserRegs};
-use std::collections::HashMap;
-use std::io::{Cursor, Read, Seek, SeekFrom};
-use std::iter::Iterator;
-use std::ops::ControlFlow::Break;
-use std::time::Duration;
 
 pub mod breakpoints;
 pub mod debugger_ui;

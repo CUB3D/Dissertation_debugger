@@ -1,9 +1,7 @@
 use crate::debugger_ui::widget::{InnerRender, UiMenu};
 use crate::debugger_ui::DebuggerState;
 use crate::define_ui_menu;
-use imgui::{im_str, ImStr, Ui, Window};
-use libc::stat;
-use ptrace::{MemoryMap, Process};
+use imgui::{ImStr, Ui, Window};
 
 pub struct WidgetRegisters {
     pub visible: bool,

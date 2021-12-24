@@ -1,12 +1,9 @@
 use crate::debugger_ui::widget::{ImGuiTableBuilder, InnerRender, UiMenu};
 use crate::debugger_ui::DebuggerState;
 use crate::define_ui_menu;
-use imgui::sys::{
-    igBeginTable, igEndTable, igNextColumn, igTableNextColumn, igText, ImGuiTableFlags, ImVec2,
-};
+
 use imgui::{ImStr, Ui, Window};
-use libc::stat;
-use ptrace::{MemoryMap, Process};
+
 use std::ffi::CString;
 
 #[derive(Default)]
