@@ -12,6 +12,7 @@ use ptrace::{Breakpoint, FpRegs, Process, UserRegs};
 pub use win::WindowsNTDebuggingClient as NativeDebuggingClient;
 #[cfg(target_os = "linux")]
 pub use linux::LinuxPtraceDebuggingClient as NativeDebuggingClient;
+use crate::stack::CallStack;
 
 #[derive(Clone)]
 pub enum Msg {
@@ -46,6 +47,8 @@ pub enum DebuggerMsg {
     },
     /// The process has spawned
     ProcessSpwn(Process),
+    /// The process has stopped, we have a new call stack to display
+    CallStack(CallStack),
 }
 
 
@@ -64,6 +67,9 @@ pub mod linux {
     use crossbeam_channel::{Receiver, Sender, unbounded};
     use gimli::EndianSlice;
     use crate::debugging_client::{DebuggerMsg, Msg};
+    use crate::stack::{CallStack, StackFrame};
+    use unwind::{PTraceState, Cursor as StackCursor, AddressSpace, Accessors, Byteorder, RegNum};
+
 
     #[derive(Default)]
     pub struct LinuxPtraceDebuggingClient {}
@@ -86,9 +92,6 @@ pub mod linux {
 
                         let mut local_debugger_state = crate::debugger_ui::DebuggerState::default();
 
-                        // let mut bp = Breakpoint::new(0x00005555555551b8);
-                        // bp.install(child);
-
                         send_from_debug
                             .send(DebuggerMsg::ProcessSpwn(child))
                             .expect("Send proc");
@@ -102,6 +105,40 @@ pub mod linux {
                             let status = child.wait_for();
 
                             if status.wifstopped() {
+                                // Walk the call stack
+                                let mut call_stack = Vec::new();
+
+                                let state = PTraceState::new(child.0 as u32).unwrap();
+                                let space = AddressSpace::new(Accessors::ptrace(), Byteorder::DEFAULT).unwrap();
+                                let mut cursor = StackCursor::remote(&space, &state).unwrap();
+                                loop {
+                                    let ip = cursor.register(RegNum::IP).unwrap();
+
+                                    match (cursor.procedure_info(), cursor.procedure_name()) {
+                                        (Ok(ref info), Ok(ref name)) if ip == info.start_ip() + name.offset() => {
+                                            call_stack.push(StackFrame {
+                                                addr: ip as usize,
+                                                description: format!("{} ({:#016x}) + {:#x}",
+                                                                     name.name(),
+                                                                     info.start_ip(),
+                                                                     name.offset())
+                                            });
+                                        }
+                                        _ => {
+                                            call_stack.push(StackFrame {
+                                                addr: ip as usize,
+                                                description: "????".to_string()
+                                            })
+                                        },
+                                    }
+
+                                    if !cursor.step().unwrap() {
+                                        break;
+                                    }
+                                }
+                                send_from_debug.send(DebuggerMsg::CallStack(CallStack(call_stack)));
+
+                                // Handle the various trap types
                                 let stopsig = status.wstopsig();
                                 if stopsig == (libc::SIGTRAP | 0x80) {
                                     if !in_syscall {

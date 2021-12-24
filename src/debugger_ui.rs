@@ -9,7 +9,6 @@ use ptrace::{Breakpoint, Process};
 use crate::debugger_ui::controls::WidgetControls;
 use crate::debugger_ui::dissassemble::WidgetDisassemble;
 use crate::debugger_ui::elf_info::WidgetElfInfo;
-use crate::debugger_ui::stack::WidgetStack;
 use crate::debugger_ui::syscall::WidgetSyscallList;
 use crate::debugger_ui::widget::{UiMenu};
 use crate::{debugger_ui, DebuggerMsg, DebuggingClient, elf, Msg, ui};
@@ -18,6 +17,7 @@ use crate::debugging_client::NativeDebuggingClient;
 use crate::elf::Elf;
 use crate::memory_map::WidgetMemoryMap;
 use crate::registers::WidgetRegisters;
+use crate::stack::{CallStack, WidgetCallStack};
 
 //TODO: move
 #[derive(Default)]
@@ -31,6 +31,7 @@ pub struct DebuggerState {
     pub single_step_mode: bool,
     pub started: bool,
     pub current_breakpoint: Option<Breakpoint>,
+    pub call_stack: Option<CallStack>,
     //TODO: group these three together, if we have one we should have all
     pub sender: Option<Sender<Msg>>,
     pub reciever: Option<Receiver<DebuggerMsg>>,
@@ -110,6 +111,9 @@ impl DebuggerState {
                 DebuggerMsg::ProcessSpwn(p) => {
                     self.process = Some(p);
                 }
+                DebuggerMsg::CallStack(cs) => {
+                    self.call_stack = Some(cs);
+                }
             }
         }
     }
@@ -146,7 +150,7 @@ pub struct DebuggerUi {
     registers: WidgetRegisters,
     elf_info: WidgetElfInfo,
     breakpoints: WidgetBreakpoints,
-    stack: WidgetStack,
+    stack: WidgetCallStack,
     dissassemble: WidgetDisassemble,
     controls: WidgetControls,
 }
@@ -382,56 +386,6 @@ pub mod elf_info {
                 ui.text(im_str!("Process id: {}", p.0));
             } else {
                 ui.text(im_str!("Process not started"));
-            }
-        }
-    }
-}
-
-pub mod stack {
-    use std::io::{Read, Seek, SeekFrom};
-    use crate::debugger_ui::DebuggerState;
-    use imgui::{im_str, ImStr, Ui, Window};
-    use libc::stat;
-    use ptrace::{MemoryMap, Process};
-    use crate::debugger_ui::widget::{InnerRender, UiMenu};
-
-    #[derive(Default)]
-    pub struct WidgetStack {
-        pub visible: bool
-    }
-    define_ui_menu!(WidgetStack, "Stack");
-
-    impl InnerRender for WidgetStack {
-        fn render_inner(&mut self, state: &mut DebuggerState, ui: &Ui) {
-            if let Some(process) = state.process {
-                if let Some(mmap) = ptrace::get_memory_map(process.0) {
-                    let stack_section = mmap
-                        .0
-                        .iter()
-                        .find(|m| m.path.contains("[stack]"))
-                        .expect("Failed to find stack");
-                    let mut mem_file =
-                        std::fs::File::open(format!("/proc/{}/mem", process.0))
-                            .expect("No mem?");
-                    let mut mem =
-                        vec![0u8; stack_section.range.end - stack_section.range.start];
-                    mem_file
-                        .seek(SeekFrom::Start(stack_section.range.start as u64))
-                        .expect("Seek failed");
-                    mem_file
-                        .read_exact(&mut mem)
-                        .expect("Failed to read memory range");
-
-                    ui.columns(9, im_str!("mem"), true);
-                    for (line_num, line) in mem.chunks(8).enumerate() {
-                        ui.text(im_str!("{:X}", stack_section.range.start + line_num * 8));
-                        ui.next_column();
-                        for byte in line {
-                            ui.text(im_str!("{:2X}", byte));
-                            ui.next_column();
-                        }
-                    }
-                }
             }
         }
     }
