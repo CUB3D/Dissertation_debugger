@@ -49,6 +49,8 @@ pub enum DebuggerMsg {
     ProcessSpwn(Process),
     /// The process has stopped, we have a new call stack to display
     CallStack(CallStack),
+    /// The process has executed a syscall
+    Syscall(String),
 }
 
 
@@ -142,11 +144,47 @@ pub mod linux {
                                 let stopsig = status.wstopsig();
                                 if stopsig == (libc::SIGTRAP | 0x80) {
                                     if !in_syscall {
+
+                                        // Figure out the details of the syscall
+                                        let user_regs = child.ptrace_getregs();
+                                        let syscall_desc = match user_regs.orig_ax as libc::c_long {
+                                            libc::SYS_brk => format!("brk({})", user_regs.di),
+                                            libc::SYS_arch_prctl => format!("SYS_arch_prctl({})", user_regs.di),
+                                            libc::SYS_mmap => format!("SYS_mmap(?)"),
+                                            libc::SYS_access => format!("SYS_access(?)"),
+                                            libc::SYS_newfstatat => format!("SYS_newfstatat(?)"),
+                                            libc::SYS_mprotect => format!("SYS_mprotect(?)"),
+                                            libc::SYS_write => format!("SYS_write(?)"),
+                                            libc::SYS_read => format!("SYS_read(?)"),
+                                            libc::SYS_munmap => format!("SYS_munmap(?)"),
+                                            libc::SYS_exit_group => format!("SYS_exit_group(?)"),
+                                            libc::SYS_pread64 => format!("SYS_pread64(?)"),
+                                            libc::SYS_close => {
+                                                format!("close({})", user_regs.di)
+                                            }
+                                            libc::SYS_openat => {
+                                                let fd_name = match user_regs.di as i32 {
+                                                    -100 => "AT_FDCWD".to_string(),
+                                                    _ => format!("{}", user_regs.di),
+                                                };
+
+                                                let str_arg = unsafe { ptrace::ptrace_read_string(child.0, user_regs.si as i64) };
+
+                                                format!("openat({}, {}, ?)", fd_name, str_arg)
+                                            }
+                                            _ => format!("Unknown({})", user_regs.orig_ax),
+                                        };
+                                        send_from_debug.send(DebuggerMsg::Syscall(syscall_desc));
+
+
                                         send_from_debug.send(DebuggerMsg::SyscallTrap {
-                                            user_regs: child.ptrace_getregs(),
+                                            user_regs: user_regs.clone(),
                                             fp_regs: child.ptrace_getfpregs(),
                                         })
-                                            .expect("Faeild to send from debug");
+                                            .expect("Failed to send from debug");
+
+
+
                                     } else {
                                         child.ptrace_syscall();
                                         in_syscall = false;

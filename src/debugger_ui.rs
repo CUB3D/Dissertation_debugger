@@ -60,44 +60,6 @@ impl DebuggerState {
                     }
                 }
                 DebuggerMsg::SyscallTrap { user_regs, fp_regs } => {
-                    let proc = self.process.expect("Got syscalltrap without a process????????");
-
-                    let syscall_desc = match user_regs.orig_ax as libc::c_long {
-                        libc::SYS_brk => format!("brk({})", user_regs.di),
-                        libc::SYS_arch_prctl => format!("SYS_arch_prctl({})", user_regs.di),
-                        libc::SYS_mmap => format!("SYS_mmap(?)"),
-                        libc::SYS_access => format!("SYS_access(?)"),
-                        libc::SYS_newfstatat => format!("SYS_newfstatat(?)"),
-                        libc::SYS_mprotect => format!("SYS_mprotect(?)"),
-                        libc::SYS_write => format!("SYS_write(?)"),
-                        libc::SYS_read => format!("SYS_read(?)"),
-                        libc::SYS_munmap => format!("SYS_munmap(?)"),
-                        libc::SYS_exit_group => format!("SYS_exit_group(?)"),
-                        libc::SYS_pread64 => format!("SYS_pread64(?)"),
-
-                        libc::SYS_close => {
-                            format!("close({})", user_regs.di)
-                        }
-                        libc::SYS_openat => {
-                            let fd_name = match user_regs.di as i32 {
-                                -100 => "AT_FDCWD".to_string(),
-                                _ => format!("{}", user_regs.di),
-                            };
-
-                            // let str_arg = if user_regs.si < 0x6FFFFFFFFFFF {
-                            //     println!("Reading {:X}", user_regs.si);
-                            //     unsafe { ptrace::ptrace_read_string(proc.0, user_regs.si as i64) }
-                            // } else {
-                            //     format!("0x{:X}", user_regs.si)
-                            // };
-
-                            let str_arg = format!("0x{:X}", user_regs.si);
-                            format!("openat({}, {}, ?)", fd_name, str_arg)
-                        }
-                        _ => format!("Unknown({})", user_regs.orig_ax),
-                    };
-
-                    self.syscall_list.push(syscall_desc);
                     self.cache_user_regs = Some(user_regs);
                     if self.auto_stp {
                         self.sender.as_ref().unwrap().send(Msg::Continue);
@@ -113,6 +75,9 @@ impl DebuggerState {
                 }
                 DebuggerMsg::CallStack(cs) => {
                     self.call_stack = Some(cs);
+                }
+                DebuggerMsg::Syscall(s) => {
+                    self.syscall_list.push(s);
                 }
             }
         }
