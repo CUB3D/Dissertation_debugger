@@ -1,23 +1,23 @@
-use std::io::Cursor;
-use std::time::Duration;
-use crossbeam_channel::{Receiver, Sender};
-use imgui::{im_str, Ui, Window};
-use imgui::sys::igBeginMainMenuBar;
-use imgui_filedialog::FileDialog;
-use libc::stat;
-use ptrace::{Breakpoint, Process};
+use crate::breakpoints::WidgetBreakpoints;
 use crate::debugger_ui::controls::WidgetControls;
 use crate::debugger_ui::dissassemble::WidgetDisassemble;
 use crate::debugger_ui::elf_info::WidgetElfInfo;
 use crate::debugger_ui::syscall::WidgetSyscallList;
-use crate::debugger_ui::widget::{UiMenu};
-use crate::{debugger_ui, DebuggerMsg, DebuggingClient, elf, Msg, ui};
-use crate::breakpoints::WidgetBreakpoints;
+use crate::debugger_ui::widget::UiMenu;
 use crate::debugging_client::NativeDebuggingClient;
 use crate::elf::Elf;
 use crate::memory_map::WidgetMemoryMap;
 use crate::registers::WidgetRegisters;
 use crate::stack::{CallStack, WidgetCallStack};
+use crate::{debugger_ui, elf, ui, DebuggerMsg, DebuggingClient, Msg};
+use crossbeam_channel::{Receiver, Sender};
+use imgui::sys::igBeginMainMenuBar;
+use imgui::{im_str, Ui, Window};
+use imgui_filedialog::FileDialog;
+use libc::stat;
+use ptrace::{Breakpoint, Process};
+use std::io::Cursor;
+use std::time::Duration;
 
 //TODO: move
 #[derive(Default)]
@@ -45,13 +45,18 @@ impl DebuggerState {
         self.elf = Some(elf_parsed);
 
         self.client = Some(NativeDebuggingClient::default());
-        let (sender,reciever) = self.client.as_mut().unwrap().start(&binary);
+        let (sender, reciever) = self.client.as_mut().unwrap().start(&binary);
         self.sender = Some(sender);
         self.reciever = Some(reciever);
     }
 
     pub fn process_incoming_message(&mut self) {
-        if let Ok(msg) = self.reciever.as_ref().unwrap().recv_timeout(Duration::from_nanos(1)) {
+        if let Ok(msg) = self
+            .reciever
+            .as_ref()
+            .unwrap()
+            .recv_timeout(Duration::from_nanos(1))
+        {
             match msg {
                 DebuggerMsg::Trap { user_regs, fp_regs } => {
                     self.cache_user_regs = Some(user_regs);
@@ -65,7 +70,11 @@ impl DebuggerState {
                         self.sender.as_ref().unwrap().send(Msg::Continue);
                     }
                 }
-                DebuggerMsg::BPTrap { user_regs, fp_regs, breakpoint } => {
+                DebuggerMsg::BPTrap {
+                    user_regs,
+                    fp_regs,
+                    breakpoint,
+                } => {
                     // int3 never auto continues
                     self.cache_user_regs = Some(user_regs);
                     self.current_breakpoint = Some(breakpoint);
@@ -93,7 +102,11 @@ impl DebuggerState {
             Msg::SingleStep(_) => {}
             Msg::AddBreakpoint(b) => self.breakpoints.push(b),
             Msg::RemoveBreakpoint(baddr) => {
-                let index = self.breakpoints.iter_mut().position(|b| b.address == baddr).expect("Failed to find bp");
+                let index = self
+                    .breakpoints
+                    .iter_mut()
+                    .position(|b| b.address == baddr)
+                    .expect("Failed to find bp");
                 self.breakpoints.remove(index);
             }
             Msg::InstallBreakpoint { .. } => {}
@@ -156,18 +169,28 @@ impl DebuggerUi {
                     fd.open_modal();
                 }
             });
-           ui.menu(im_str!("View"), || {
-               for menu in &mut menus {
-                   ui.checkbox(menu.title(), menu.visible_mut());
-               }
-           });
+            ui.menu(im_str!("View"), || {
+                for menu in &mut menus {
+                    ui.checkbox(menu.title(), menu.visible_mut());
+                }
+            });
         });
         if fd.display() {
             println!("Browsing folder {:?}", fd.current_path());
             if fd.is_ok() {
                 //TODO: no lossy string here
-                state.load_binary(&fd.selection().unwrap().files().first().unwrap().to_string_lossy());
-                println!("Open file {:?}", fd.selection().unwrap().files().first().unwrap())
+                state.load_binary(
+                    &fd.selection()
+                        .unwrap()
+                        .files()
+                        .first()
+                        .unwrap()
+                        .to_string_lossy(),
+                );
+                println!(
+                    "Open file {:?}",
+                    fd.selection().unwrap().files().first().unwrap()
+                )
             }
             fd.close();
         }
@@ -189,12 +212,11 @@ impl DebuggerUi {
     }
 }
 
-
 pub mod widget {
+    use crate::debugger_ui::DebuggerState;
     use imgui::{im_str, ImStr, Ui, Window};
     use libc::stat;
     use ptrace::{MemoryMap, Process};
-    use crate::debugger_ui::DebuggerState;
 
     pub trait UiMenu {
         fn render_if_visible(&mut self, state: &mut DebuggerState, ui: &Ui) {
@@ -212,21 +234,41 @@ pub mod widget {
         fn render_inner(&mut self, state: &mut DebuggerState, ui: &Ui);
     }
 
-    use std::ffi::{CStr, CString};
-    use imgui::sys::{igBeginTable, igEndTable, igTableHeadersRow, igTableNextColumn, igTableNextRow, igTableSetupColumn, ImGuiID, ImGuiTableColumnFlags, ImGuiTableFlags, ImVec2};
     use imgui::sys::cty::c_int;
+    use imgui::sys::{
+        igBeginTable, igEndTable, igTableHeadersRow, igTableNextColumn, igTableNextRow,
+        igTableSetupColumn, ImGuiID, ImGuiTableColumnFlags, ImGuiTableFlags, ImVec2,
+    };
+    use std::ffi::{CStr, CString};
 
     pub struct ImGuiTableBuilder;
 
     impl ImGuiTableBuilder {
-        pub fn with_name<S: Fn(&mut Self), T: Fn(&mut Self)>(name: CString, column_count: c_int, setup_func: S, build_func: T) {
-            if unsafe { igBeginTable(name.as_ptr(), column_count, ImGuiTableFlags::default(), ImVec2::zero(), 0.0f32) } {
-                let mut s = Self{};
+        pub fn with_name<S: Fn(&mut Self), T: Fn(&mut Self)>(
+            name: CString,
+            column_count: c_int,
+            setup_func: S,
+            build_func: T,
+        ) {
+            if unsafe {
+                igBeginTable(
+                    name.as_ptr(),
+                    column_count,
+                    ImGuiTableFlags::default(),
+                    ImVec2::zero(),
+                    0.0f32,
+                )
+            } {
+                let mut s = Self {};
                 setup_func(&mut s);
-                unsafe { igTableHeadersRow(); }
+                unsafe {
+                    igTableHeadersRow();
+                }
                 build_func(&mut s);
             }
-            unsafe { igEndTable(); }
+            unsafe {
+                igEndTable();
+            }
         }
 
         pub fn next_column(&mut self) {
@@ -250,14 +292,14 @@ pub mod widget {
 }
 
 mod syscall {
+    use crate::debugger_ui::widget::UiMenu;
+    use crate::debugger_ui::DebuggerState;
     use imgui::{im_str, ImStr, Ui, Window};
     use libc::stat;
     use ptrace::{MemoryMap, Process};
-    use crate::debugger_ui::DebuggerState;
-    use crate::debugger_ui::widget::UiMenu;
 
     pub struct WidgetSyscallList {
-        pub visible: bool
+        pub visible: bool,
     }
 
     impl WidgetSyscallList {
@@ -268,9 +310,7 @@ mod syscall {
 
     impl Default for WidgetSyscallList {
         fn default() -> Self {
-            Self {
-                visible: true
-            }
+            Self { visible: true }
         }
     }
 
@@ -293,44 +333,43 @@ mod syscall {
     }
 }
 
+#[macro_export]
+macro_rules! define_ui_menu {
+    ($name: ty, $title: expr) => {
+        impl $name {
+            pub fn as_uimenu(&mut self) -> &mut dyn UiMenu {
+                self
+            }
+        }
 
-    #[macro_export]
-    macro_rules! define_ui_menu {
-        ($name: ty, $title: expr) => {
-            impl $name {
-                pub fn as_uimenu(&mut self) -> &mut dyn UiMenu {
-                    self
-                }
+        impl UiMenu for $name {
+            fn render(&mut self, state: &mut DebuggerState, ui: &Ui) {
+                Window::new(self.title()).build(ui, || {
+                    self.render_inner(state, ui);
+                });
             }
 
-            impl UiMenu for $name {
-                fn render(&mut self, state: &mut DebuggerState, ui: &Ui) {
-                    Window::new(self.title()).build(ui, || {
-                        self.render_inner(state, ui);
-                    });
-                }
-
-                fn visible_mut(&mut self) -> &mut bool {
-                    &mut self.visible
-                }
-
-                fn title(&self) -> &'static ImStr {
-                    imgui::im_str!($title)
-                }
+            fn visible_mut(&mut self) -> &mut bool {
+                &mut self.visible
             }
-        };
-    }
+
+            fn title(&self) -> &'static ImStr {
+                imgui::im_str!($title)
+            }
+        }
+    };
+}
 
 pub mod elf_info {
+    use crate::debugger_ui::widget::{InnerRender, UiMenu};
+    use crate::debugger_ui::DebuggerState;
     use imgui::{im_str, ImStr, Ui, Window};
     use libc::stat;
     use ptrace::{MemoryMap, Process};
-    use crate::debugger_ui::{DebuggerState};
-    use crate::debugger_ui::widget::{InnerRender, UiMenu};
 
     #[derive(Default)]
     pub struct WidgetElfInfo {
-        pub visible: bool
+        pub visible: bool,
     }
 
     define_ui_menu!(WidgetElfInfo, "Info");
@@ -341,7 +380,6 @@ pub mod elf_info {
             if let Some(elf_parsed) = &state.elf {
                 ui.text(im_str!("Entry point: 0x{:X}", elf_parsed.entry_point));
                 ui.text(im_str!("Section count: 0x{:X}", elf_parsed.sections.len()));
-
             } else {
                 ui.text(im_str!("No binary loaded"));
             }
@@ -357,15 +395,18 @@ pub mod elf_info {
 }
 
 pub mod dissassemble {
-    use std::collections::HashMap;
-    use std::io::{Read, Seek, SeekFrom};
-    use iced_x86::{Decoder, DecoderOptions, Formatter, Instruction, IntelFormatter, SymbolResolver, SymbolResult};
+    use crate::debugger_ui::widget::{InnerRender, UiMenu};
     use crate::debugger_ui::DebuggerState;
+    use crate::{debugging_info, Msg};
+    use iced_x86::{
+        Decoder, DecoderOptions, Formatter, Instruction, IntelFormatter, SymbolResolver,
+        SymbolResult,
+    };
     use imgui::{im_str, ImStr, StyleColor, Ui, Window};
     use libc::stat;
     use ptrace::{Breakpoint, MemoryMap, Process};
-    use crate::debugger_ui::widget::{InnerRender, UiMenu};
-    use crate::{debugging_info, Msg};
+    use std::collections::HashMap;
+    use std::io::{Read, Seek, SeekFrom};
 
     #[derive(Default, Clone)]
     struct MySymbolResolver {
@@ -374,8 +415,12 @@ pub mod dissassemble {
 
     impl SymbolResolver for MySymbolResolver {
         fn symbol(
-            &mut self, _instruction: &Instruction, _operand: u32, _instruction_operand: Option<u32>,
-            address: u64, _address_size: u32,
+            &mut self,
+            _instruction: &Instruction,
+            _operand: u32,
+            _instruction_operand: Option<u32>,
+            address: u64,
+            _address_size: u32,
         ) -> Option<SymbolResult> {
             if let Some(symbol_string) = self.map.get(&address) {
                 // The 'address' arg is the address of the symbol and doesn't have to be identical
@@ -390,7 +435,7 @@ pub mod dissassemble {
 
     #[derive(Default)]
     pub struct WidgetDisassemble {
-        pub visible: bool
+        pub visible: bool,
     }
     define_ui_menu!(WidgetDisassemble, "Dissassemble");
 
@@ -398,13 +443,13 @@ pub mod dissassemble {
         fn render_inner(&mut self, state: &mut DebuggerState, ui: &Ui) {
             let load_address = 0x555555554000;
 
-
-
             if let Some(elf_parsed) = &state.elf {
                 let subprograms = debugging_info::parse_dwarf_info(&elf_parsed).subprograms;
                 let mut resolver = Box::new(MySymbolResolver::default());
                 for prog in &subprograms {
-                    resolver.map.insert(prog.start_addr + load_address, prog.name.clone());
+                    resolver
+                        .map
+                        .insert(prog.start_addr + load_address, prog.name.clone());
                 }
 
                 if let Some(user_regs) = &state.cache_user_regs {
@@ -418,7 +463,11 @@ pub mod dissassemble {
                     let text = elf_parsed.by_name(".text");
                     let fini = elf_parsed.by_name(".fini");
 
-                    let sections = [init, plt, text, fini].into_iter().filter(|f| f.is_some()).map(|f| f.unwrap()).collect::<Vec<_>>();
+                    let sections = [init, plt, text, fini]
+                        .into_iter()
+                        .filter(|f| f.is_some())
+                        .map(|f| f.unwrap())
+                        .collect::<Vec<_>>();
 
                     for text in &sections {
                         ui.text(im_str!("{}:", text.name));
@@ -429,7 +478,8 @@ pub mod dissassemble {
                             DecoderOptions::NONE,
                         );
                         let mut instruction = Instruction::default();
-                        let mut formatter = IntelFormatter::with_options(Some(resolver.clone()), None);
+                        let mut formatter =
+                            IntelFormatter::with_options(Some(resolver.clone()), None);
                         let mut output = String::new();
 
                         for ii in 0..0x8000 {
@@ -439,13 +489,16 @@ pub mod dissassemble {
                                 output.clear();
                                 formatter.format(&instruction, &mut output);
 
-                                if let Some(sub) = subprograms.iter().find(|s| s.start_addr == (instruction.ip() - load_address)) {
+                                if let Some(sub) = subprograms
+                                    .iter()
+                                    .find(|s| s.start_addr == (instruction.ip() - load_address))
+                                {
                                     ui.text(im_str!("<{}>: ", sub.name))
                                 }
 
-
                                 let token = if instruction.ip() == user_regs.ip {
-                                    let token = ui.push_style_color(StyleColor::Text, [0.0, 1.0, 0.0, 1.0]);
+                                    let token =
+                                        ui.push_style_color(StyleColor::Text, [0.0, 1.0, 0.0, 1.0]);
                                     // ui.text_colored(
                                     //     [0.0, 1.0, 0.0, 1.0],
                                     //     im_str!("{:016X} {}", instruction.ip(), output),
@@ -456,15 +509,23 @@ pub mod dissassemble {
                                     None
                                 };
 
-                                let bp = state.breakpoints.iter().find(|bp| bp.address == instruction.ip() as usize);
-                                let bp_text = if bp.is_some() {
-                                    "B "
-                                } else {
-                                    "  "
-                                };
+                                let bp = state
+                                    .breakpoints
+                                    .iter()
+                                    .find(|bp| bp.address == instruction.ip() as usize);
+                                let bp_text = if bp.is_some() { "B " } else { "  " };
 
-                                if ui.small_button(&im_str!("{}{:016X} {}", bp_text, instruction.ip(), output)) {
-                                    if let Some(pos) = state.breakpoints.iter().position(|bp| bp.address == instruction.ip() as usize) {
+                                if ui.small_button(&im_str!(
+                                    "{}{:016X} {}",
+                                    bp_text,
+                                    instruction.ip(),
+                                    output
+                                )) {
+                                    if let Some(pos) = state
+                                        .breakpoints
+                                        .iter()
+                                        .position(|bp| bp.address == instruction.ip() as usize)
+                                    {
                                         state.breakpoints.remove(pos);
                                     } else {
                                         let bp = Breakpoint::new(instruction.ip() as usize);
@@ -488,23 +549,21 @@ pub mod dissassemble {
 }
 
 pub mod controls {
-    use std::io::{Read, Seek, SeekFrom};
+    use crate::debugger_ui::widget::{InnerRender, UiMenu};
     use crate::debugger_ui::DebuggerState;
+    use crate::Msg;
     use imgui::{im_str, ImStr, Ui, Window};
     use libc::stat;
     use ptrace::{MemoryMap, Process};
-    use crate::debugger_ui::widget::{InnerRender, UiMenu};
-    use crate::Msg;
+    use std::io::{Read, Seek, SeekFrom};
 
     pub struct WidgetControls {
-        pub visible: bool
+        pub visible: bool,
     }
     define_ui_menu!(WidgetControls, "Controls");
     impl Default for WidgetControls {
         fn default() -> Self {
-            Self {
-                visible: true,
-            }
+            Self { visible: true }
         }
     }
 
@@ -512,15 +571,37 @@ pub mod controls {
         fn render_inner(&mut self, state: &mut DebuggerState, ui: &Ui) {
             let mut send_continue = || {
                 if let Some(bp) = state.current_breakpoint {
-                    state.sender.as_ref().unwrap().send(Msg::DoSingleStep).expect("Failed to send msg");
-                    state.sender.as_ref().unwrap().send(Msg::InstallBreakpoint { address: bp.address }).expect("Failed to send msg");
+                    state
+                        .sender
+                        .as_ref()
+                        .unwrap()
+                        .send(Msg::DoSingleStep)
+                        .expect("Failed to send msg");
+                    state
+                        .sender
+                        .as_ref()
+                        .unwrap()
+                        .send(Msg::InstallBreakpoint {
+                            address: bp.address,
+                        })
+                        .expect("Failed to send msg");
                     state.current_breakpoint = None;
                 }
-                state.sender.as_ref().unwrap().send(Msg::Continue).expect("Failed to send msg");
+                state
+                    .sender
+                    .as_ref()
+                    .unwrap()
+                    .send(Msg::Continue)
+                    .expect("Failed to send msg");
             };
 
             if ui.small_button(im_str!("|>")) {
-                state.sender.as_ref().unwrap().send(Msg::Start).expect("Failed to send msg");
+                state
+                    .sender
+                    .as_ref()
+                    .unwrap()
+                    .send(Msg::Start)
+                    .expect("Failed to send msg");
                 state.started = true;
             }
             if state.started {
@@ -536,7 +617,10 @@ pub mod controls {
                 }
 
                 if ui.checkbox(im_str!("Single step mode"), &mut state.single_step_mode) {
-                    state.sender.as_ref().unwrap()
+                    state
+                        .sender
+                        .as_ref()
+                        .unwrap()
                         .send(Msg::SingleStep(state.single_step_mode))
                         .expect("Failed to send msg");
                 }

@@ -113,11 +113,7 @@ pub fn parse<T: Read + Seek>(from: &mut T) -> Result<Elf, Box<dyn Error>> {
     let mut data = vec![0u8; from.stream_len()? as usize];
     from.read_exact(&mut data)?;
 
-    Ok(Elf::from_sections(
-        _entry_pos,
-        sections,
-        data,
-    ))
+    Ok(Elf::from_sections(_entry_pos, sections, data))
 }
 
 #[derive(Clone, Debug)]
@@ -150,7 +146,7 @@ pub fn parse_rela<T: Read + Seek>(from: &mut T, elf: &Elf) -> Result<Vec<Rela>, 
             sym: sym as u32,
             type_: type_ as u32,
             name,
-            r_addend
+            r_addend,
         })
     };
 
@@ -164,7 +160,10 @@ pub fn parse_rela<T: Read + Seek>(from: &mut T, elf: &Elf) -> Result<Vec<Rela>, 
     Ok(relocations)
 }
 
-pub fn parse_symbol_table<T: Read + Seek>(from: &mut T, elf: &Elf) -> Result<Vec<()>, Box<dyn Error>> {
+pub fn parse_symbol_table<T: Read + Seek>(
+    from: &mut T,
+    elf: &Elf,
+) -> Result<Vec<()>, Box<dyn Error>> {
     for _ in 0..64 {
         let name = from.read_u32()?;
         let info = from.read_u8()?;
@@ -185,7 +184,10 @@ pub fn parse_symbol_table<T: Read + Seek>(from: &mut T, elf: &Elf) -> Result<Vec
         let name = &name[..strlen];
         let name = String::from_utf8_lossy(name);
 
-        println!("Bind: {:2x} Type: {:2x} shndx:{:4x} Addr: {:4x} Size: {:4x} Name: {}", bind, type_, shndx, addr, size, name);
+        println!(
+            "Bind: {:2x} Type: {:2x} shndx:{:4x} Addr: {:4x} Size: {:4x} Name: {}",
+            bind, type_, shndx, addr, size, name
+        );
     }
 
     Ok(vec![])
@@ -201,7 +203,10 @@ pub struct DynamicSymbol {
     size: u64,
 }
 
-pub fn parse_dynamic_symbol_table<T: Read + Seek>(from: &mut T, elf: &Elf) -> Result<Vec<DynamicSymbol>, Box<dyn Error>> {
+pub fn parse_dynamic_symbol_table<T: Read + Seek>(
+    from: &mut T,
+    elf: &Elf,
+) -> Result<Vec<DynamicSymbol>, Box<dyn Error>> {
     let mut symbols = Vec::new();
     let dynstr = elf.by_name(".dynstr").expect("No dynstr");
 
@@ -227,7 +232,7 @@ pub fn parse_dynamic_symbol_table<T: Read + Seek>(from: &mut T, elf: &Elf) -> Re
             type_,
             shndx,
             addr,
-            size
+            size,
         })
     };
 
@@ -237,7 +242,6 @@ pub fn parse_dynamic_symbol_table<T: Read + Seek>(from: &mut T, elf: &Elf) -> Re
 
     Ok(symbols)
 }
-
 
 trait SimpleRead {
     fn read_u8(&mut self) -> io::Result<u8>;

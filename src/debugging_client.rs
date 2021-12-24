@@ -8,11 +8,11 @@ pub trait DebuggingClient {
 use crossbeam_channel::{Receiver, Sender};
 use ptrace::{Breakpoint, FpRegs, Process, UserRegs};
 
-#[cfg(target_os = "windows")]
-pub use win::WindowsNTDebuggingClient as NativeDebuggingClient;
+use crate::stack::CallStack;
 #[cfg(target_os = "linux")]
 pub use linux::LinuxPtraceDebuggingClient as NativeDebuggingClient;
-use crate::stack::CallStack;
+#[cfg(target_os = "windows")]
+pub use win::WindowsNTDebuggingClient as NativeDebuggingClient;
 
 #[derive(Clone)]
 pub enum Msg {
@@ -23,7 +23,9 @@ pub enum Msg {
     /// Remove the breakpoint at the given address
     RemoveBreakpoint(usize),
     /// Install the breakpoint that has already been added at the given address
-    InstallBreakpoint { address: usize },
+    InstallBreakpoint {
+        address: usize,
+    },
     DoSingleStep,
 }
 
@@ -53,25 +55,26 @@ pub enum DebuggerMsg {
     Syscall(String),
 }
 
-
 #[cfg(target_os = "linux")]
 pub mod linux {
     use crate::debugging_client::DebuggingClient;
-    use std::collections::HashMap;
-    use iced_x86::{Decoder, DecoderOptions, Formatter, Instruction, IntelFormatter, SymbolResolver, SymbolResult};
+    use crate::debugging_client::{DebuggerMsg, Msg};
+    use crate::stack::{CallStack, StackFrame};
+    use crossbeam_channel::{unbounded, Receiver, Sender};
+    use gimli::EndianSlice;
+    use iced_x86::{
+        Decoder, DecoderOptions, Formatter, Instruction, IntelFormatter, SymbolResolver,
+        SymbolResult,
+    };
     use imgui::{im_str, StyleColor, Window};
     use libc::user;
     use ptrace::{Breakpoint, BreakpointAction, Event, FpRegs, Process, Ptrace, UserRegs};
+    use std::collections::HashMap;
     use std::io::{Cursor, Read, Seek, SeekFrom};
     use std::iter::Iterator;
     use std::ops::ControlFlow::Break;
     use std::time::Duration;
-    use crossbeam_channel::{Receiver, Sender, unbounded};
-    use gimli::EndianSlice;
-    use crate::debugging_client::{DebuggerMsg, Msg};
-    use crate::stack::{CallStack, StackFrame};
-    use unwind::{PTraceState, Cursor as StackCursor, AddressSpace, Accessors, Byteorder, RegNum};
-
+    use unwind::{Accessors, AddressSpace, Byteorder, Cursor as StackCursor, PTraceState, RegNum};
 
     #[derive(Default)]
     pub struct LinuxPtraceDebuggingClient {}
@@ -84,8 +87,8 @@ pub mod linux {
             // Can't send a ref to a thread
             let binary_path = binary_path.to_string();
             std::thread::spawn(move || {
-                let mut debugger =
-                    Ptrace::new(&binary_path, "Debuggee", "").expect("Failed to start process under ptrace");
+                let mut debugger = Ptrace::new(&binary_path, "Debuggee", "")
+                    .expect("Failed to start process under ptrace");
 
                 let msg = reciever.recv().expect("failed to get msg");
                 match msg {
@@ -111,27 +114,31 @@ pub mod linux {
                                 let mut call_stack = Vec::new();
 
                                 let state = PTraceState::new(child.0 as u32).unwrap();
-                                let space = AddressSpace::new(Accessors::ptrace(), Byteorder::DEFAULT).unwrap();
+                                let space =
+                                    AddressSpace::new(Accessors::ptrace(), Byteorder::DEFAULT)
+                                        .unwrap();
                                 let mut cursor = StackCursor::remote(&space, &state).unwrap();
                                 loop {
                                     let ip = cursor.register(RegNum::IP).unwrap();
 
                                     match (cursor.procedure_info(), cursor.procedure_name()) {
-                                        (Ok(ref info), Ok(ref name)) if ip == info.start_ip() + name.offset() => {
+                                        (Ok(ref info), Ok(ref name))
+                                            if ip == info.start_ip() + name.offset() =>
+                                        {
                                             call_stack.push(StackFrame {
                                                 addr: ip as usize,
-                                                description: format!("{} ({:#016x}) + {:#x}",
-                                                                     name.name(),
-                                                                     info.start_ip(),
-                                                                     name.offset())
+                                                description: format!(
+                                                    "{} ({:#016x}) + {:#x}",
+                                                    name.name(),
+                                                    info.start_ip(),
+                                                    name.offset()
+                                                ),
                                             });
                                         }
-                                        _ => {
-                                            call_stack.push(StackFrame {
-                                                addr: ip as usize,
-                                                description: "????".to_string()
-                                            })
-                                        },
+                                        _ => call_stack.push(StackFrame {
+                                            addr: ip as usize,
+                                            description: "????".to_string(),
+                                        }),
                                     }
 
                                     if !cursor.step().unwrap() {
@@ -144,12 +151,13 @@ pub mod linux {
                                 let stopsig = status.wstopsig();
                                 if stopsig == (libc::SIGTRAP | 0x80) {
                                     if !in_syscall {
-
                                         // Figure out the details of the syscall
                                         let user_regs = child.ptrace_getregs();
                                         let syscall_desc = match user_regs.orig_ax as libc::c_long {
                                             libc::SYS_brk => format!("brk({})", user_regs.di),
-                                            libc::SYS_arch_prctl => format!("SYS_arch_prctl({})", user_regs.di),
+                                            libc::SYS_arch_prctl => {
+                                                format!("SYS_arch_prctl({})", user_regs.di)
+                                            }
                                             libc::SYS_mmap => format!("SYS_mmap(?)"),
                                             libc::SYS_access => format!("SYS_access(?)"),
                                             libc::SYS_newfstatat => format!("SYS_newfstatat(?)"),
@@ -168,7 +176,12 @@ pub mod linux {
                                                     _ => format!("{}", user_regs.di),
                                                 };
 
-                                                let str_arg = unsafe { ptrace::ptrace_read_string(child.0, user_regs.si as i64) };
+                                                let str_arg = unsafe {
+                                                    ptrace::ptrace_read_string(
+                                                        child.0,
+                                                        user_regs.si as i64,
+                                                    )
+                                                };
 
                                                 format!("openat({}, {}, ?)", fd_name, str_arg)
                                             }
@@ -176,15 +189,12 @@ pub mod linux {
                                         };
                                         send_from_debug.send(DebuggerMsg::Syscall(syscall_desc));
 
-
-                                        send_from_debug.send(DebuggerMsg::SyscallTrap {
-                                            user_regs: user_regs.clone(),
-                                            fp_regs: child.ptrace_getfpregs(),
-                                        })
+                                        send_from_debug
+                                            .send(DebuggerMsg::SyscallTrap {
+                                                user_regs: user_regs.clone(),
+                                                fp_regs: child.ptrace_getfpregs(),
+                                            })
                                             .expect("Failed to send from debug");
-
-
-
                                     } else {
                                         child.ptrace_syscall();
                                         in_syscall = false;
@@ -200,21 +210,25 @@ pub mod linux {
 
                                     if event == 0 {
                                         // We know we didnt hit a syscall but we might have hit a manual breakpoint, check if we hit a 0xcc
-                                        if child.ptrace_peektext(regs.ip as usize - 1)
-                                            & 0xFF
+                                        if child.ptrace_peektext(regs.ip as usize - 1) & 0xFF
                                             == 0xCC
                                         {
                                             println!(
                                                 "Hit a breakpoint @ 0x{:x} ::: {:X}",
                                                 regs.ip,
-                                                child.ptrace_peektext(
-                                                    regs.ip as usize - 1
-                                                )
+                                                child.ptrace_peektext(regs.ip as usize - 1)
                                             );
                                             let bp = local_debugger_state.breakpoints.iter_mut().find(|bp| bp.address == regs.ip as usize - 1).expect("Hit a breakpoint, but we can't find it to uninstall");
                                             bp.uninstall(child);
                                             // Go back to the start of the original instruction so it actually gets executed
-                                            unsafe { libc::ptrace(libc::PTRACE_POKEUSER, child, 8 * libc::RIP, regs.ip - 1) };
+                                            unsafe {
+                                                libc::ptrace(
+                                                    libc::PTRACE_POKEUSER,
+                                                    child,
+                                                    8 * libc::RIP,
+                                                    regs.ip - 1,
+                                                )
+                                            };
                                             regs.ip -= 1;
 
                                             //TODO: Testing, we shouldnt step after removing the bp so that the state can be seen before the bp
@@ -249,10 +263,11 @@ pub mod linux {
                                     Msg::Continue => break,
                                     Msg::SingleStep(s) => is_singlestep = s,
                                     Msg::AddBreakpoint(bp) => {
-                                        let bp = local_debugger_state.breakpoints.last_mut().unwrap();
+                                        let bp =
+                                            local_debugger_state.breakpoints.last_mut().unwrap();
                                         let success = bp.install(child);
                                         println!("Installed bp at {:?}, success: {}", bp, success);
-                                    },
+                                    }
                                     Msg::DoSingleStep => {
                                         child.ptrace_singlestep();
                                         child.wait_for();
@@ -287,18 +302,32 @@ pub mod linux {
 
 #[cfg(target_os = "windows")]
 pub mod win {
-    use windows::Win32::Foundation::PSTR;
     use crate::debugging_client::DebuggingClient;
     use core::default::Default;
+    use windows::Win32::Foundation::PSTR;
 
     pub struct WindowsNTDebuggingClient {}
 
     impl DebuggingClient for WindowsNTDebuggingClient {
         fn start() {
             unsafe {
-                let mut si = Box::<::windows::Win32::System::Threading::STARTUPINFOA>::new_zeroed().assume_init();
-                let mut pi = Box::<::windows::Win32::System::Threading::PROCESS_INFORMATION>::new_zeroed().assume_init();
-                ::windows::Win32::System::Threading::CreateProcessA(PSTR::default(),PSTR(b"test.exe\0".as_ptr() as _), core::ptr::null_mut(), core::ptr::null_mut(), false, 0, core::ptr::null_mut(), PSTR::default(), si.as_mut(), pi.as_mut());
+                let mut si = Box::<::windows::Win32::System::Threading::STARTUPINFOA>::new_zeroed()
+                    .assume_init();
+                let mut pi =
+                    Box::<::windows::Win32::System::Threading::PROCESS_INFORMATION>::new_zeroed()
+                        .assume_init();
+                ::windows::Win32::System::Threading::CreateProcessA(
+                    PSTR::default(),
+                    PSTR(b"test.exe\0".as_ptr() as _),
+                    core::ptr::null_mut(),
+                    core::ptr::null_mut(),
+                    false,
+                    0,
+                    core::ptr::null_mut(),
+                    PSTR::default(),
+                    si.as_mut(),
+                    pi.as_mut(),
+                );
             }
         }
     }
