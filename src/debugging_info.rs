@@ -60,7 +60,7 @@ pub fn parse_dwarf_info(elf_parsed: &Elf) -> DebuggingInfo {
                     if let Ok(s) = dwarf.attr_string(&unit, attr.value()) {
                         use gimli::Reader;
                         let s = s.to_slice().expect("foobar");
-                        let s = String::from_utf8(s.to_vec());
+                        let _s = String::from_utf8(s.to_vec());
                         // println!("   {}: {:?}", attr.name(), s);
                     } else {
                         // println!("   {}: {:?}", attr.name(), attr.value());

@@ -9,12 +9,12 @@ use crate::elf::Elf;
 use crate::memory_map::WidgetMemoryMap;
 use crate::registers::WidgetRegisters;
 use crate::stack::{CallStack, WidgetCallStack};
-use crate::{debugger_ui, elf, ui, DebuggerMsg, DebuggingClient, Msg};
+use crate::{debugger_ui, elf, DebuggerMsg, DebuggingClient, Msg};
 use crossbeam_channel::{Receiver, Sender};
-use imgui::sys::igBeginMainMenuBar;
-use imgui::{im_str, Ui, Window};
+
+use imgui::{im_str, Ui};
 use imgui_filedialog::FileDialog;
-use libc::stat;
+
 use ptrace::{Breakpoint, Process};
 use std::io::Cursor;
 use std::time::Duration;
@@ -40,7 +40,7 @@ pub struct DebuggerState {
 
 impl DebuggerState {
     pub fn load_binary(&mut self, binary: &str) {
-        let mut binary_content = std::fs::read(&binary).expect("Failed to read binary");
+        let binary_content = std::fs::read(&binary).expect("Failed to read binary");
         let elf_parsed = elf::parse(&mut Cursor::new(binary_content)).expect("Failed to parse elf");
         self.elf = Some(elf_parsed);
 
@@ -58,13 +58,19 @@ impl DebuggerState {
             .recv_timeout(Duration::from_nanos(1))
         {
             match msg {
-                DebuggerMsg::Trap { user_regs, fp_regs } => {
+                DebuggerMsg::Trap {
+                    user_regs,
+                    fp_regs: _,
+                } => {
                     self.cache_user_regs = Some(user_regs);
                     if self.auto_stp {
                         self.sender.as_ref().unwrap().send(Msg::Continue);
                     }
                 }
-                DebuggerMsg::SyscallTrap { user_regs, fp_regs } => {
+                DebuggerMsg::SyscallTrap {
+                    user_regs,
+                    fp_regs: _,
+                } => {
                     self.cache_user_regs = Some(user_regs);
                     if self.auto_stp {
                         self.sender.as_ref().unwrap().send(Msg::Continue);
@@ -72,7 +78,7 @@ impl DebuggerState {
                 }
                 DebuggerMsg::BPTrap {
                     user_regs,
-                    fp_regs,
+                    fp_regs: _,
                     breakpoint,
                 } => {
                     // int3 never auto continues
@@ -214,9 +220,7 @@ impl DebuggerUi {
 
 pub mod widget {
     use crate::debugger_ui::DebuggerState;
-    use imgui::{im_str, ImStr, Ui, Window};
-    use libc::stat;
-    use ptrace::{MemoryMap, Process};
+    use imgui::{ImStr, Ui};
 
     pub trait UiMenu {
         fn render_if_visible(&mut self, state: &mut DebuggerState, ui: &Ui) {
@@ -237,9 +241,9 @@ pub mod widget {
     use imgui::sys::cty::c_int;
     use imgui::sys::{
         igBeginTable, igEndTable, igTableHeadersRow, igTableNextColumn, igTableNextRow,
-        igTableSetupColumn, ImGuiID, ImGuiTableColumnFlags, ImGuiTableFlags, ImVec2,
+        igTableSetupColumn, ImGuiTableFlags, ImVec2,
     };
-    use std::ffi::{CStr, CString};
+    use std::ffi::CString;
 
     pub struct ImGuiTableBuilder;
 
@@ -295,8 +299,6 @@ mod syscall {
     use crate::debugger_ui::widget::UiMenu;
     use crate::debugger_ui::DebuggerState;
     use imgui::{im_str, ImStr, Ui, Window};
-    use libc::stat;
-    use ptrace::{MemoryMap, Process};
 
     pub struct WidgetSyscallList {
         pub visible: bool,
@@ -364,8 +366,6 @@ pub mod elf_info {
     use crate::debugger_ui::widget::{InnerRender, UiMenu};
     use crate::debugger_ui::DebuggerState;
     use imgui::{im_str, ImStr, Ui, Window};
-    use libc::stat;
-    use ptrace::{MemoryMap, Process};
 
     #[derive(Default)]
     pub struct WidgetElfInfo {
@@ -403,10 +403,9 @@ pub mod dissassemble {
         SymbolResult,
     };
     use imgui::{im_str, ImStr, StyleColor, Ui, Window};
-    use libc::stat;
-    use ptrace::{Breakpoint, MemoryMap, Process};
+
+    use ptrace::Breakpoint;
     use std::collections::HashMap;
-    use std::io::{Read, Seek, SeekFrom};
 
     #[derive(Default, Clone)]
     struct MySymbolResolver {
@@ -454,7 +453,7 @@ pub mod dissassemble {
 
                 if let Some(user_regs) = &state.cache_user_regs {
                     // The address that the process is loaded into memory at
-                    let base_address = load_address + elf_parsed.entry_point;
+                    let _base_address = load_address + elf_parsed.entry_point;
                     //TODO: just use memory directly, no elf parse+handle self modifing
                     //TODO: ip should be ip of instruction 0
 
@@ -482,7 +481,7 @@ pub mod dissassemble {
                             IntelFormatter::with_options(Some(resolver.clone()), None);
                         let mut output = String::new();
 
-                        for ii in 0..0x8000 {
+                        for _ii in 0..0x8000 {
                             if decoder.can_decode() {
                                 decoder.decode_out(&mut instruction);
 
@@ -553,9 +552,6 @@ pub mod controls {
     use crate::debugger_ui::DebuggerState;
     use crate::Msg;
     use imgui::{im_str, ImStr, Ui, Window};
-    use libc::stat;
-    use ptrace::{MemoryMap, Process};
-    use std::io::{Read, Seek, SeekFrom};
 
     pub struct WidgetControls {
         pub visible: bool,
