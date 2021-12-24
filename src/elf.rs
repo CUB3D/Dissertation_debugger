@@ -61,7 +61,6 @@ pub fn parse<T: Read + Seek>(from: &mut T) -> Result<Elf, Box<dyn Error>> {
     // debug_assert_eq!(_isa, 0xF3, "RISCv only please");
 
     from.seek(SeekFrom::Start(_section_header_pos))?;
-
     let mut sections = Vec::with_capacity(_second_header_entry_count as usize);
 
     for _ in 0.._second_header_entry_count {
@@ -80,7 +79,10 @@ pub fn parse<T: Read + Seek>(from: &mut T) -> Result<Elf, Box<dyn Error>> {
         let pos = from.stream_position().unwrap();
         from.seek(SeekFrom::Start(offset)).unwrap();
         let mut data = vec![0u8; size as usize];
-        from.read_exact(&mut data)?;
+        println!("Fix this here in elf");
+        // from.read_exact(&mut data)?;
+        from.read(&mut data)?;
+        println!("T");
 
         // Go back to this section
         from.seek(SeekFrom::Start(pos)).unwrap();
@@ -93,6 +95,8 @@ pub fn parse<T: Read + Seek>(from: &mut T) -> Result<Elf, Box<dyn Error>> {
             addr,
         })
     }
+
+    println!("SN");
 
     let section_name_section = sections.get(section_names_index as usize).cloned().unwrap();
 
@@ -153,7 +157,7 @@ pub fn parse_rela<T: Read + Seek>(from: &mut T, elf: &Elf) -> Result<Vec<Rela>, 
     let mut relocations = Vec::new();
 
     while let Ok(rela) = parse_rela() {
-        println!("Rela: {:?}", rela);
+        // println!("Rela: {:?}", rela);
         relocations.push(rela);
     }
 

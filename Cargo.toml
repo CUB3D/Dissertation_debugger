@@ -19,6 +19,7 @@ clap = "2.34.0"
 gimli = "0.26.1"
 fallible-iterator = "0.2.0"
 crossbeam-channel = "0.5.1"
+unwind = {version = "0.4.0", features=["ptrace"]}
 
 [target.'cfg(unix)'.dependencies]
 ptrace = { path = "./ptrace", features = ["breakpoints"]}

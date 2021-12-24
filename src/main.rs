@@ -23,6 +23,7 @@ pub mod debugging_client;
 pub mod memory_map;
 pub mod breakpoints;
 pub mod registers;
+pub mod stack;
 
 fn main() {
     let matches = App::new("debugger")

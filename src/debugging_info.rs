@@ -49,7 +49,7 @@ pub fn parse_dwarf_info(elf_parsed: &Elf) -> DebuggingInfo {
             let mut entries = unit.entries();
             while let Some((delta_depth, entry)) = entries.next_dfs().unwrap() {
                 depth += delta_depth;
-                println!("<{}><{:x}> {}", depth, /*entry.offset().0*/0, entry.tag());
+                // println!("<{}><{:x}> {}", depth, /*entry.offset().0*/0, entry.tag());
 
                 // Iterate over the attributes in the DIE.
                 let mut attrs = entry.attrs();
@@ -59,9 +59,9 @@ pub fn parse_dwarf_info(elf_parsed: &Elf) -> DebuggingInfo {
                         use gimli::Reader;
                         let s = s.to_slice().expect("foobar");
                         let s = String::from_utf8(s.to_vec());
-                        println!("   {}: {:?}", attr.name(), s);
+                        // println!("   {}: {:?}", attr.name(), s);
                     } else {
-                        println!("   {}: {:?}", attr.name(), attr.value());
+                        // println!("   {}: {:?}", attr.name(), attr.value());
                     }
                 }
 
