@@ -1,20 +1,18 @@
+use crate::debugger_ui::widget::{InnerRender, UiMenu};
+use crate::debugger_ui::DebuggerState;
+use crate::define_ui_menu;
 use imgui::{im_str, ImStr, Ui, Window};
 use libc::stat;
 use ptrace::{MemoryMap, Process};
-use crate::debugger_ui::DebuggerState;
-use crate::debugger_ui::widget::{InnerRender, UiMenu};
-use crate::define_ui_menu;
 
 pub struct WidgetRegisters {
-    pub visible: bool
+    pub visible: bool,
 }
 define_ui_menu!(WidgetRegisters, "Registers");
 
 impl Default for WidgetRegisters {
     fn default() -> Self {
-        Self {
-            visible: true
-        }
+        Self { visible: true }
     }
 }
 
