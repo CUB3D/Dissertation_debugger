@@ -22,7 +22,7 @@ define_ui_menu!(WidgetCallStack, "Call Stack");
 
 impl InnerRender for WidgetCallStack {
     fn render_inner(&mut self, state: &mut DebuggerState, ui: &Ui) {
-        if let Some(process) = state.process {
+        if let Some(_) = state.process {
             if let Some(call_stack) = &state.call_stack {
                 if let Some(table) = ui.begin_table_header("Breakpoints", [
                     TableColumnSetup::new("Address"),
