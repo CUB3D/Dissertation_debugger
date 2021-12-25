@@ -1,7 +1,6 @@
 use crate::debugger_ui::widget::{InnerRender, UiMenu};
-use crate::debugger_ui::DebuggerState;
-use crate::{define_ui_menu, Msg};
-use imgui::{ImStr, TableColumnSetup, Ui, Window};
+use crate::{DebuggerState, define_ui_menu, Msg};
+use imgui::{TableColumnSetup, Ui, Window};
 
 #[derive(Default)]
 pub struct WidgetBreakpoints {

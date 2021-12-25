@@ -1,9 +1,10 @@
 #![feature(seek_stream_len)]
 #![feature(new_uninit)]
 
-use crate::debugger_ui::{DebuggerState, DebuggerUi};
+use crate::debugger_ui::DebuggerUi;
 use clap::{App, Arg};
 use debugging_client::{DebuggerMsg, DebuggingClient, Msg};
+use crate::debugger_state::DebuggerState;
 
 pub mod breakpoints;
 pub mod debugger_ui;
@@ -14,6 +15,11 @@ pub mod memory_map;
 pub mod registers;
 pub mod stack;
 pub mod ui;
+pub mod debugger_state;
+pub mod syscall;
+pub mod elf_info;
+pub mod controls;
+pub mod disassemble;
 
 fn main() {
     let matches = App::new("debugger")

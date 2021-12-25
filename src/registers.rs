@@ -1,7 +1,6 @@
 use crate::debugger_ui::widget::{InnerRender, UiMenu};
-use crate::debugger_ui::DebuggerState;
-use crate::define_ui_menu;
-use imgui::{ImStr, Ui, Window};
+use crate::{DebuggerState, define_ui_menu};
+use imgui::{Ui, Window};
 
 pub struct WidgetRegisters {
     pub visible: bool,
