@@ -1,8 +1,7 @@
 use crate::debugger_ui::widget::{ImGuiTableBuilder, InnerRender, UiMenu};
-use crate::debugger_ui::DebuggerState;
-use crate::define_ui_menu;
+use crate::{DebuggerState, define_ui_menu};
 
-use imgui::{ImStr, Ui, Window};
+use imgui::{Ui, Window};
 
 use std::ffi::CString;
 

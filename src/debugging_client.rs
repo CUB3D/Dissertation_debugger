@@ -67,6 +67,7 @@ pub mod linux {
     use std::iter::Iterator;
 
     use unwind::{Accessors, AddressSpace, Byteorder, Cursor as StackCursor, PTraceState, RegNum};
+    use crate::DebuggerState;
 
     #[derive(Default)]
     pub struct LinuxPtraceDebuggingClient {}
@@ -87,7 +88,7 @@ pub mod linux {
                     Msg::Start => {
                         let child = debugger.inital_spawn_child();
 
-                        let mut local_debugger_state = crate::debugger_ui::DebuggerState::default();
+                        let mut local_debugger_state = DebuggerState::default();
 
                         send_from_debug
                             .send(DebuggerMsg::ProcessSpwn(child))

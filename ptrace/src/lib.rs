@@ -3,8 +3,7 @@
 use std::ffi::CString;
 use std::error::Error;
 use std::collections::BTreeMap;
-use std::ops::{Range, Deref};
-use std::io::{Seek, SeekFrom, Read, Write};
+use std::ops::{Range};
 use std::fmt::Debug;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -48,8 +47,8 @@ pub enum MemoryMapEntryPermissionsKind {
 impl core::fmt::Display for MemoryMapEntryPermissionsKind {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
-            Private => write!(f, "private"),
-            Shared => write!(f, "shared"),
+            Self::Private => write!(f, "private"),
+            Self::Shared => write!(f, "shared"),
         }
     }
 }
@@ -220,7 +219,7 @@ impl VFS {
         let index = self.get_file_index_by_path(path)?;
         self.files.get(index).cloned()
     }
-    fn fd_is_path(&mut self, fd: i64, path: &str) -> bool {
+    pub fn fd_is_path(&mut self, fd: i64, path: &str) -> bool {
         if let Some(index) = self.get_file_index_by_path(path) {
             if let Some(fh) = self.inode_map.get(&fd) {
                 return fh.file_id == index;
