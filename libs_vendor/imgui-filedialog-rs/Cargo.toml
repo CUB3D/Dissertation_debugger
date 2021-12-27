@@ -11,7 +11,7 @@ readme = "README.md"
 
 [dependencies]
 imgui-filedialog-sys = { version = "0.1.0", path = "imgui-filedialog-sys" }
-imgui = "0.7"
+imgui = "0.8"
 
 [workspace]
 members = [
