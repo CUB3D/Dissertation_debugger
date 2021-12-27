@@ -11,9 +11,7 @@ pub mod debugger_ui;
 pub mod debugging_client;
 pub mod debugging_info;
 pub mod elf;
-#[cfg(target_os = "linux")]
 pub mod memory_map;
-#[cfg(target_os = "linux")]
 pub mod registers;
 pub mod stack;
 pub mod ui;
