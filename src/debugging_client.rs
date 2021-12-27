@@ -14,6 +14,14 @@ pub struct Breakpoint {
     pub address: usize
 }
 #[cfg(target_os = "windows")]
+impl Breakpoint{
+    pub fn new(address: usize) -> Self {
+        Self {
+            address,
+        }
+    }
+}
+#[cfg(target_os = "windows")]
 #[derive(Clone, Debug)]
 pub struct FpRegs;
 #[cfg(target_os = "windows")]
