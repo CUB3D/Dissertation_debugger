@@ -1,7 +1,11 @@
 use std::io::Cursor;
 use std::time::Duration;
 use crossbeam_channel::{Receiver, Sender};
-use ptrace::{Breakpoint, Process};
+#[cfg(target_os = "linux")]
+use ptrace::{Breakpoint, Process, UserRegs};
+#[cfg(target_os = "windows")]
+use crate::debugging_client::{Breakpoint, Process, UserRegs};
+
 use crate::elf::Elf;
 use crate::{DebuggerMsg, DebuggingClient, Msg};
 use crate::debugging_client::NativeDebuggingClient;
@@ -12,7 +16,7 @@ pub struct DebuggerState {
     pub syscall_list: Vec<String>,
     pub breakpoints: Vec<Breakpoint>,
     pub process: Option<Process>,
-    pub cache_user_regs: Option<Box<ptrace::UserRegs>>,
+    pub cache_user_regs: Option<Box<UserRegs>>,
     pub elf: Option<Elf>,
     pub auto_stp: bool,
     pub single_step_mode: bool,
@@ -28,8 +32,11 @@ pub struct DebuggerState {
 impl DebuggerState {
     pub fn load_binary(&mut self, binary: &str) {
         let binary_content = std::fs::read(&binary).expect("Failed to read binary");
-        let elf_parsed = crate::elf::parse(&mut Cursor::new(binary_content)).expect("Failed to parse elf");
-        self.elf = Some(elf_parsed);
+        #[cfg(target_os = "linux")]
+            {
+                let elf_parsed = crate::elf::parse(&mut Cursor::new(binary_content)).expect("Failed to parse elf");
+                self.elf = Some(elf_parsed);
+            }
 
         self.client = Some(NativeDebuggingClient::default());
         let (sender, reciever) = self.client.as_mut().unwrap().start(&binary);

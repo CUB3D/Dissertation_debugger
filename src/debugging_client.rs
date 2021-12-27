@@ -1,12 +1,28 @@
 //! A client for debugging a given process, handles process spawning and event handling for a given platform
+use crossbeam_channel::{Receiver, Sender};
 
 pub trait DebuggingClient {
     //TODO: should this return an instance of the client
     fn start(&mut self, binary_path: &str) -> (Sender<Msg>, Receiver<DebuggerMsg>);
 }
 
-use crossbeam_channel::{Receiver, Sender};
+#[cfg(target_os = "linux")]
 use ptrace::{Breakpoint, FpRegs, Process, UserRegs};
+
+#[cfg(target_os = "windows")]
+#[derive(Copy, Clone, Debug)]
+pub struct Breakpoint {
+    pub address: usize
+}
+#[cfg(target_os = "windows")]
+#[derive(Clone, Debug)]
+pub struct FpRegs;
+#[cfg(target_os = "windows")]
+#[derive(Copy, Clone, Debug)]
+pub struct Process(pub i32);
+#[cfg(target_os = "windows")]
+#[derive(Clone, Debug)]
+pub struct UserRegs;
 
 use crate::stack::CallStack;
 #[cfg(target_os = "linux")]
@@ -295,33 +311,94 @@ pub mod linux {
 
 #[cfg(target_os = "windows")]
 pub mod win {
-    use crate::debugging_client::DebuggingClient;
+    use crate::debugging_client::{DebuggingClient, Process};
     use core::default::Default;
-    use windows::Win32::Foundation::PSTR;
+    use std::ffi::CString;
+    use crossbeam_channel::{Receiver, Sender, unbounded};
+    use windows::Win32::Foundation;
+    use windows::Win32::Foundation::{HANDLE_FLAGS, PSTR};
+    use crate::{DebuggerMsg, Msg};
 
+    #[derive(Default)]
     pub struct WindowsNTDebuggingClient {}
 
     impl DebuggingClient for WindowsNTDebuggingClient {
-        fn start() {
-            unsafe {
-                let mut si = Box::<::windows::Win32::System::Threading::STARTUPINFOA>::new_zeroed()
-                    .assume_init();
-                let mut pi =
-                    Box::<::windows::Win32::System::Threading::PROCESS_INFORMATION>::new_zeroed()
-                        .assume_init();
-                ::windows::Win32::System::Threading::CreateProcessA(
-                    PSTR::default(),
-                    PSTR(b"test.exe\0".as_ptr() as _),
-                    core::ptr::null_mut(),
-                    core::ptr::null_mut(),
-                    false,
-                    0,
-                    core::ptr::null_mut(),
-                    PSTR::default(),
-                    si.as_mut(),
-                    pi.as_mut(),
-                );
-            }
+        fn start(&mut self, binary_path: &str) -> (Sender<Msg>, Receiver<DebuggerMsg>) {
+            let (send_from_debug, rec_from_debug) = unbounded();
+            let (sender, reciever) = unbounded();
+
+            // Can't send a ref to a thread
+            let binary_path = binary_path.to_string();
+            std::thread::spawn(move || {
+                let binary_path = CString::new(binary_path).unwrap();
+                let mut bpath_bytevec = binary_path.as_bytes().to_vec();
+
+                let msg = reciever.recv().expect("failed to get msg");
+                match msg {
+                    Msg::Start => {
+                        let pi = unsafe {
+                            let mut si = Box::<::windows::Win32::System::Threading::STARTUPINFOA>::new_zeroed()
+                                .assume_init();
+                            let mut pi =
+                                Box::<::windows::Win32::System::Threading::PROCESS_INFORMATION>::new_zeroed()
+                                    .assume_init();
+                            let r = ::windows::Win32::System::Threading::CreateProcessA(
+                                PSTR::default(),
+                                PSTR(bpath_bytevec.as_mut_ptr()),
+                                core::ptr::null_mut(),
+                                core::ptr::null_mut(),
+                                false,
+                                ::windows::Win32::System::Threading::DEBUG_PROCESS,
+                                core::ptr::null_mut(),
+                                PSTR::default(),
+                                si.as_mut(),
+                                pi.as_mut(),
+                            );
+                            assert_eq!(r.as_bool(), true, "Process started successfully");
+                            pi
+                        };
+
+                        // Check that the target is 64bit as well as us
+                        // unsafe  {
+                        //     let mut b = Box::<::windows::Win32::Foundation::BOOL>::new_zeroed().assume_init();
+                        //     let r = ::windows::Win32::System::Threading::IsWow64Process(::windows::Win32::Foundation::HANDLE(pi.dwProcessId as isize), b.as_mut());
+                        //     assert_eq!(r.as_bool(), true, "Target must be 64 bit");
+                        //     assert_eq!(b.as_bool(), true, "Target must be 64 bit");
+                        // }
+
+                        unsafe {
+                            let r = ::windows::Win32::System::Diagnostics::Debug::DebugActiveProcess(pi.dwProcessId);
+                            // assert_eq!(r.as_bool(), true, "Debugger attached");
+                        }
+
+                        send_from_debug
+                                .send(DebuggerMsg::ProcessSpwn(Process(pi.dwProcessId as i32)))
+                                .expect("Send proc");
+
+                            loop {
+                                let evt = unsafe {
+                                    //TODO: use waitfordebugex
+                                    let mut evt = Box::<::windows::Win32::System::Diagnostics::Debug::DEBUG_EVENT>::new_zeroed().assume_init();
+                                    evt.dwProcessId = pi.dwProcessId;
+                                    let r = ::windows::Win32::System::Diagnostics::Debug::WaitForDebugEvent(evt.as_mut(), 0);
+                                    // assert_eq!(r.as_bool(), true, "Debug event recieved");
+                                    evt
+                                };
+                                if evt.dwDebugEventCode != 0 {
+                                    println!("Got debug event {}", evt.dwDebugEventCode);
+                                    let status = ::windows::Win32::Foundation::DBG_CONTINUE;
+                                    unsafe {
+                                        ::windows::Win32::System::Diagnostics::Debug::ContinueDebugEvent(evt.dwProcessId, evt.dwThreadId, status.0 as _);
+                                    }
+                                }
+                            }
+                    }
+                    _ => {}
+                }
+                drop(binary_path);
+            });
+
+            return (sender, rec_from_debug);
         }
     }
 }

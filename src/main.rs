@@ -11,7 +11,9 @@ pub mod debugger_ui;
 pub mod debugging_client;
 pub mod debugging_info;
 pub mod elf;
+#[cfg(target_os = "linux")]
 pub mod memory_map;
+#[cfg(target_os = "linux")]
 pub mod registers;
 pub mod stack;
 pub mod ui;
@@ -19,6 +21,7 @@ pub mod debugger_state;
 pub mod syscall;
 pub mod elf_info;
 pub mod controls;
+#[cfg(target_os = "linux")]
 pub mod disassemble;
 
 fn main() {
