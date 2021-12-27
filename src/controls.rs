@@ -15,7 +15,7 @@ impl Default for WidgetControls {
 impl InnerRender for WidgetControls {
     fn render_inner(&mut self, state: &mut DebuggerState, ui: &Ui) {
         let mut send_continue = || {
-            if let Some(bp) = state.current_breakpoint {
+            if let Some(bp) = &state.current_breakpoint {
                 state
                     .sender
                     .as_ref()

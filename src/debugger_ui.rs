@@ -1,5 +1,7 @@
 use crate::breakpoints::WidgetBreakpoints;
+#[cfg(target_os = "linux")]
 use crate::memory_map::WidgetMemoryMap;
+#[cfg(target_os = "linux")]
 use crate::registers::WidgetRegisters;
 use crate::stack::{WidgetCallStack};
 use crate::{debugger_ui, DebuggerState};
@@ -8,18 +10,22 @@ use imgui::{Ui};
 use imgui_filedialog::FileDialog;
 
 use crate::controls::WidgetControls;
+#[cfg(target_os = "linux")]
 use crate::disassemble::WidgetDisassemble;
 use crate::elf_info::WidgetElfInfo;
 use crate::syscall::WidgetSyscallList;
 
 pub struct DebuggerUi {
     fd: FileDialog,
+    #[cfg(target_os = "linux")]
     mmap: WidgetMemoryMap,
     syscalls: WidgetSyscallList,
+    #[cfg(target_os = "linux")]
     registers: WidgetRegisters,
     elf_info: WidgetElfInfo,
     breakpoints: WidgetBreakpoints,
     stack: WidgetCallStack,
+    #[cfg(target_os = "linux")]
     dissassemble: WidgetDisassemble,
     controls: WidgetControls,
 }
@@ -28,12 +34,15 @@ impl Default for DebuggerUi {
     fn default() -> Self {
         Self {
             fd: imgui_filedialog::FileDialog::create("Test"),
+            #[cfg(target_os = "linux")]
             mmap: Default::default(),
             syscalls: Default::default(),
+            #[cfg(target_os = "linux")]
             registers: Default::default(),
             elf_info: Default::default(),
             breakpoints: Default::default(),
             stack: Default::default(),
+            #[cfg(target_os = "linux")]
             dissassemble: Default::default(),
             controls: Default::default(),
         }
@@ -43,12 +52,15 @@ impl Default for DebuggerUi {
 impl DebuggerUi {
     pub fn render(&mut self, ui: &Ui, state: &mut DebuggerState) {
         let mut menus = [
+            #[cfg(target_os = "linux")]
             self.mmap.as_uimenu(),
             self.syscalls.as_uimenu(),
+            #[cfg(target_os = "linux")]
             self.registers.as_uimenu(),
             self.elf_info.as_uimenu(),
             self.breakpoints.as_uimenu(),
             self.stack.as_uimenu(),
+            #[cfg(target_os = "linux")]
             self.dissassemble.as_uimenu(),
             self.controls.as_uimenu(),
         ];
