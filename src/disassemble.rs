@@ -6,8 +6,8 @@ use iced_x86::{
 };
 use imgui::{StyleColor, Ui, Window};
 
-use ptrace::Breakpoint;
 use std::collections::HashMap;
+use crate::debugging_client::Breakpoint;
 
 #[derive(Default, Clone)]
 struct MySymbolResolver {

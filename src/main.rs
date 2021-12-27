@@ -19,7 +19,6 @@ pub mod debugger_state;
 pub mod syscall;
 pub mod elf_info;
 pub mod controls;
-#[cfg(target_os = "linux")]
 pub mod disassemble;
 
 fn main() {

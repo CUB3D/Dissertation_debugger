@@ -8,7 +8,6 @@ use imgui::{Ui};
 use imgui_filedialog::FileDialog;
 
 use crate::controls::WidgetControls;
-#[cfg(target_os = "linux")]
 use crate::disassemble::WidgetDisassemble;
 use crate::elf_info::WidgetElfInfo;
 use crate::syscall::WidgetSyscallList;
@@ -21,7 +20,6 @@ pub struct DebuggerUi {
     elf_info: WidgetElfInfo,
     breakpoints: WidgetBreakpoints,
     stack: WidgetCallStack,
-    #[cfg(target_os = "linux")]
     dissassemble: WidgetDisassemble,
     controls: WidgetControls,
 }
@@ -36,7 +34,6 @@ impl Default for DebuggerUi {
             elf_info: Default::default(),
             breakpoints: Default::default(),
             stack: Default::default(),
-            #[cfg(target_os = "linux")]
             dissassemble: Default::default(),
             controls: Default::default(),
         }
@@ -52,7 +49,6 @@ impl DebuggerUi {
             self.elf_info.as_uimenu(),
             self.breakpoints.as_uimenu(),
             self.stack.as_uimenu(),
-            #[cfg(target_os = "linux")]
             self.dissassemble.as_uimenu(),
             self.controls.as_uimenu(),
         ];
