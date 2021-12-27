@@ -2,6 +2,39 @@ use crate::debugger_ui::widget::{InnerRender, UiMenu};
 use crate::{DebuggerState, define_ui_menu};
 use imgui::{Ui, Window};
 
+/// Translated to rust from <arch/x86/include/asm/user_64.h>
+#[derive(Default, Copy, Clone, Debug, Eq, PartialEq)]
+#[repr(C)]
+pub struct UserRegs {
+    pub r15: libc::c_ulonglong,
+    pub r14: libc::c_ulonglong,
+    pub r13: libc::c_ulonglong,
+    pub r12: libc::c_ulonglong,
+    pub bp: libc::c_ulonglong,
+    pub bx: libc::c_ulonglong,
+    pub r11: libc::c_ulonglong,
+    pub r10: libc::c_ulonglong,
+    pub r9: libc::c_ulonglong,
+    pub r8: libc::c_ulonglong,
+    pub ax: libc::c_ulonglong,
+    pub cx: libc::c_ulonglong,
+    pub dx: libc::c_ulonglong,
+    pub si: libc::c_ulonglong,
+    pub di: libc::c_ulonglong,
+    pub orig_ax: libc::c_ulonglong,
+    pub ip: libc::c_ulonglong,
+    pub cs: libc::c_ulonglong,
+    pub flags: libc::c_ulonglong,
+    pub sp: libc::c_ulonglong,
+    pub ss: libc::c_ulonglong,
+    pub fs_base: libc::c_ulonglong,
+    pub gs_base: libc::c_ulonglong,
+    pub ds: libc::c_ulonglong,
+    pub es: libc::c_ulonglong,
+    pub fs: libc::c_ulonglong,
+    pub gs: libc::c_ulonglong,
+}
+
 pub struct WidgetRegisters {
     pub visible: bool,
 }
