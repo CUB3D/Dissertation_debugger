@@ -1,0 +1,21 @@
+[package]
+name = "imgui-filedialog"
+version = "0.2.0"
+edition = "2018"
+authors = ["Ben Dickson"]
+repository = "https://github.com/dbr/imgui-filedialog-rs"
+description = "Rust bindings to https://github.com/aiekick/ImGuiFileDialog/"
+license = "MIT"
+categories = ["gui", "api-bindings"]
+readme = "README.md"
+
+[dependencies]
+imgui-filedialog-sys = { version = "0.1.0", path = "imgui-filedialog-sys" }
+imgui = "0.7"
+
+[workspace]
+members = [
+    "imgui-filedialog-sys",
+    "imgui-filedialog-sys-bindgen",
+    "imgui-filedialog-examples",
+]
