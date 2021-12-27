@@ -8,6 +8,7 @@ use crate::debugging_client::{Breakpoint, Process};
 
 use crate::elf::Elf;
 use crate::{DebuggerMsg, DebuggingClient, Msg};
+use crate::common_binary_file::BinaryFile;
 use crate::debugging_client::NativeDebuggingClient;
 use crate::memory_map::MemoryMap;
 use crate::registers::UserRegs;
@@ -20,7 +21,7 @@ pub struct DebuggerState {
     pub process: Option<Process>,
     /// The last known state of the process registers, boxed as this can be too large to store on the stack in some cases
     pub cache_user_regs: Option<Box<UserRegs>>,
-    pub elf: Option<Elf>,
+    pub elf: Option<BinaryFile>,
     pub auto_stp: bool,
     pub single_step_mode: bool,
     pub started: bool,
@@ -36,11 +37,14 @@ pub struct DebuggerState {
 impl DebuggerState {
     pub fn load_binary(&mut self, binary: &str) {
         let binary_content = std::fs::read(&binary).expect("Failed to read binary");
-        #[cfg(target_os = "linux")]
-            {
-                let elf_parsed = crate::elf::parse(&mut Cursor::new(binary_content)).expect("Failed to parse elf");
-                self.elf = Some(elf_parsed);
+
+        if let Ok(elf) = crate::elf::parse(&mut Cursor::new(binary_content)) {
+            self.elf = Some(BinaryFile::Elf(elf));
+        } else {
+            if let Ok(pe) = exe::PEImage::from_disk_file(binary) {
+                self.elf = Some(BinaryFile::PE(pe));
             }
+        }
 
         self.client = Some(NativeDebuggingClient::default());
         let (sender, reciever) = self.client.as_mut().unwrap().start(&binary);

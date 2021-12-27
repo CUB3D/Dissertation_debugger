@@ -20,6 +20,7 @@ pub mod syscall;
 pub mod elf_info;
 pub mod controls;
 pub mod disassemble;
+pub mod common_binary_file;
 
 fn main() {
     let matches = App::new("debugger")
