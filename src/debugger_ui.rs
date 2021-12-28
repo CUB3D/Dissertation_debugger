@@ -6,6 +6,7 @@ use crate::{debugger_ui, DebuggerState};
 
 use imgui::{Ui};
 use imgui_filedialog::FileDialog;
+use crate::child_process::WidgetChildProcesses;
 
 use crate::controls::WidgetControls;
 use crate::disassemble::WidgetDisassemble;
@@ -22,6 +23,7 @@ pub struct DebuggerUi {
     stack: WidgetCallStack,
     dissassemble: WidgetDisassemble,
     controls: WidgetControls,
+    children: WidgetChildProcesses,
 }
 
 impl Default for DebuggerUi {
@@ -36,6 +38,7 @@ impl Default for DebuggerUi {
             stack: Default::default(),
             dissassemble: Default::default(),
             controls: Default::default(),
+            children: Default::default(),
         }
     }
 }
@@ -51,6 +54,7 @@ impl DebuggerUi {
             self.stack.as_uimenu(),
             self.dissassemble.as_uimenu(),
             self.controls.as_uimenu(),
+            self.children.as_uimenu(),
         ];
 
         let fd = &mut self.fd;

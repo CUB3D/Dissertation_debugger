@@ -5,6 +5,8 @@ use std::error::Error;
 use std::collections::BTreeMap;
 use std::ops::{Range};
 use std::fmt::Debug;
+#[cfg(feature = "child_processes")]
+use std::ops::Deref;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Event {
@@ -624,7 +626,10 @@ impl Ptrace {
         // Wait for the new process to start
         child_proc.wait_for();
 
+        #[cfg(not(feature = "child_processes"))]
         unsafe { libc::ptrace(libc::PTRACE_SETOPTIONS, child, 0, libc::PTRACE_O_EXITKILL | libc::PTRACE_O_TRACESYSGOOD)};
+        #[cfg(feature = "child_processes")]
+        unsafe { libc::ptrace(libc::PTRACE_SETOPTIONS, child, 0, libc::PTRACE_O_EXITKILL | libc::PTRACE_O_TRACESYSGOOD | libc::PTRACE_O_TRACECLONE | libc::PTRACE_O_TRACEEXEC | libc::PTRACE_O_TRACEFORK | libc::PTRACE_O_TRACEVFORK| libc::PTRACE_O_TRACEEXIT)};
 
         return child_proc;
     }
@@ -659,19 +664,19 @@ impl Ptrace {
 
             // Wait for next event
             #[cfg(feature = "child_processes")]
-            let status = {
+            let (pid, status) = {
                 let (pid, status) = Process::wait_any();
 
                 // We only care about events from the main thread
-                if pid.0 != child {
-                    pid.ptrace_cont();
-                    continue;
-                }
-                status
+                // if pid.0 != child {
+                //     pid.ptrace_cont();
+                //     continue;
+                // }
+                (pid, status)
             };
             #[cfg(not(feature = "child_processes"))]
-            let status = {
-                child_proc.wait_for()
+            let (pid, status) = {
+                (child_proc, child_proc.wait_for())
             };
 
             #[cfg(feature = "child_processes")]

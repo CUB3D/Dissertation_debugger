@@ -21,6 +21,7 @@ pub mod elf_info;
 pub mod controls;
 pub mod disassemble;
 pub mod common_binary_file;
+pub mod child_process;
 
 fn main() {
     let matches = App::new("debugger")

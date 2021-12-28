@@ -23,7 +23,7 @@ libc = "0.2.108"
 exe = "0.4.5"
 
 [target.'cfg(unix)'.dependencies]
-ptrace = { path = "./ptrace", features = ["breakpoints"]}
+ptrace = { path = "./ptrace", features = ["breakpoints", "child_processes"]}
 unwind = {version = "0.4.0", features=["ptrace"]}
 
 [target.'cfg(windows)'.dependencies]
