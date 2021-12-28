@@ -1,6 +1,7 @@
 use std::io::Cursor;
 use std::time::Duration;
 use crossbeam_channel::{Receiver, Sender};
+use libc::user;
 #[cfg(target_os = "linux")]
 use ptrace::{Breakpoint, Process};
 use ptrace::FpRegs;
@@ -15,11 +16,21 @@ use crate::memory_map::MemoryMap;
 use crate::registers::UserRegs;
 use crate::stack::CallStack;
 
+pub struct ProcessState {
+    pub process: Process,
+    /// The last known state of the process registers, boxed as this can be too large to store on the stack in some cases
+    pub cache_user_regs: Option<Box<UserRegs>>,
+    /// The last known state of the floating point registers, boxed as this can be too large to store on the stack in some cases
+    pub cache_fp_regs: Option<Box<FpRegs>>,
+
+}
+
 #[derive(Default)]
 pub struct DebuggerState {
     pub syscall_list: Vec<String>,
     pub breakpoints: Vec<Breakpoint>,
     pub process: Option<Process>,
+    pub process_state: Vec<ProcessState>,
     /// The last known state of the process registers, boxed as this can be too large to store on the stack in some cases
     pub cache_user_regs: Option<Box<UserRegs>>,
     /// The last known state of the floating point registers, boxes as this can be too large to store on the stack in some cases
@@ -95,6 +106,19 @@ impl DebuggerState {
                 }
                 DebuggerMsg::ProcessSpwn(p) => {
                     self.process = Some(p);
+                    self.process_state.push(ProcessState {
+                        process: p,
+                        cache_user_regs: None,
+                        cache_fp_regs: None,
+                    });
+                }
+                DebuggerMsg::ChildProcessSpawn(p) => {
+                    self.process_state.push(ProcessState {
+                        process: p,
+                        cache_user_regs: None,
+                        cache_fp_regs: None,
+                    });
+                    self.sender.as_ref().unwrap().send(Msg::Continue);
                 }
                 DebuggerMsg::CallStack(cs) => {
                     self.call_stack = Some(cs);
@@ -104,6 +128,9 @@ impl DebuggerState {
                 }
                 DebuggerMsg::MemoryMap(mmap) => {
                     self.memory_map = Some(mmap);
+                }
+                DebuggerMsg::UserRegisters(pid, user_regs) => {
+                    self.process_state.iter_mut().find(|p| p.process == pid).expect("No process to set regs for").cache_user_regs = Some(user_regs);
                 }
             }
         }
