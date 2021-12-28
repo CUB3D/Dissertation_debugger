@@ -6,7 +6,7 @@ pub trait DebuggingClient {
     fn start(&mut self, binary_path: &str) -> (Sender<Msg>, Receiver<DebuggerMsg>);
 }
 #[cfg(target_os = "linux")]
-use ptrace::{Breakpoint, FpRegs, Process};
+pub use ptrace::{Breakpoint, FpRegs, Process};
 
 #[cfg(target_os = "windows")]
 #[derive(Copy, Clone, Debug)]
@@ -86,15 +86,55 @@ pub mod linux {
     use crate::stack::{CallStack, StackFrame};
     use crossbeam_channel::{unbounded, Receiver, Sender};
 
-    use ptrace::Ptrace;
+    use ptrace::{MemoryMapEntryPermissionsKind, Ptrace};
 
     use std::iter::Iterator;
 
     use unwind::{Accessors, AddressSpace, Byteorder, Cursor as StackCursor, PTraceState, RegNum};
     use crate::DebuggerState;
+    use crate::memory_map::{MemoryMap, MemoryMapEntry, MemoryMapEntryPermissions};
 
     #[derive(Default)]
     pub struct LinuxPtraceDebuggingClient {}
+
+    impl LinuxPtraceDebuggingClient {
+        //TODO: idea: make this struct repr(c) then we can cast easily
+        fn convert_ptrace_registers(oregs: Box<ptrace::UserRegs>) -> Box<crate::registers::UserRegs> {
+            let mut regs = Box::<crate::registers::UserRegs>::default();
+            regs.ax = oregs.ax;
+            regs.bx = oregs.bx;
+            regs.cx = oregs.cx;
+            regs.dx = oregs.dx;
+
+            regs.bp = oregs.bp;
+            regs.sp = oregs.sp;
+            regs.si = oregs.si;
+            regs.di = oregs.di;
+
+            regs.r8 = oregs.r8;
+            regs.r9 = oregs.r9;
+            regs.r10 = oregs.r10;
+            regs.r11 = oregs.r11;
+            regs.r12 = oregs.r12;
+            regs.r13 = oregs.r13;
+            regs.r14 = oregs.r14;
+            regs.r15 = oregs.r15;
+
+            regs.ip = oregs.ip;
+
+            regs.flags = oregs.flags;
+
+            regs.orig_ax = oregs.orig_ax;
+
+            regs.gs = oregs.gs;
+            regs.fs = oregs.fs;
+            regs.ds = oregs.ds;
+            regs.cs = oregs.cs;
+            regs.ss = oregs.ss;
+
+            regs
+        }
+    }
 
     impl DebuggingClient for LinuxPtraceDebuggingClient {
         fn start(&mut self, binary_path: &str) -> (Sender<Msg>, Receiver<DebuggerMsg>) {
@@ -165,6 +205,20 @@ pub mod linux {
                                 send_from_debug.send(DebuggerMsg::CallStack(CallStack(call_stack)));
 
                                 if let Some(mmap) = ptrace::get_memory_map(child.0) {
+                                    let mmap = MemoryMap(mmap.0.iter().map(|mp| MemoryMapEntry {
+                                        path: mp.path.clone(),
+                                        range: mp.range.clone(),
+                                        permissions: MemoryMapEntryPermissions {
+                                            read: mp.permissions.read,
+                                            write: mp.permissions.write,
+                                            execute: mp.permissions.execute,
+                                            kind: match mp.permissions.kind {
+                                                ptrace::MemoryMapEntryPermissionsKind::Private => crate::memory_map::MemoryMapEntryPermissionsKind::Private,
+                                                ptrace::MemoryMapEntryPermissionsKind::Shared =>  crate::memory_map::MemoryMapEntryPermissionsKind::Shared,
+                                            }
+                                        }
+                                    }).collect());
+
                                     send_from_debug.send(DebuggerMsg::MemoryMap(mmap));
                                 }
 
@@ -210,9 +264,11 @@ pub mod linux {
                                         };
                                         send_from_debug.send(DebuggerMsg::Syscall(syscall_desc));
 
+                                        let user_regs_ui = LinuxPtraceDebuggingClient::convert_ptrace_registers(user_regs.clone());
+
                                         send_from_debug
                                             .send(DebuggerMsg::SyscallTrap {
-                                                user_regs: user_regs.clone(),
+                                                user_regs: user_regs_ui,
                                                 fp_regs: child.ptrace_getfpregs(),
                                             })
                                             .expect("Failed to send from debug");
@@ -260,7 +316,7 @@ pub mod linux {
 
                                             send_from_debug
                                                 .send(DebuggerMsg::BPTrap {
-                                                    user_regs: regs,
+                                                    user_regs: LinuxPtraceDebuggingClient::convert_ptrace_registers(regs),
                                                     fp_regs: child.ptrace_getfpregs(),
                                                     breakpoint: *bp,
                                                 })
@@ -268,7 +324,7 @@ pub mod linux {
                                         } else {
                                             send_from_debug
                                                 .send(DebuggerMsg::Trap {
-                                                    user_regs: regs,
+                                                    user_regs: LinuxPtraceDebuggingClient::convert_ptrace_registers(regs),
                                                     fp_regs: child.ptrace_getfpregs(),
                                                 })
                                                 .expect("Faeild to send from debug");

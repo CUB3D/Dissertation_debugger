@@ -137,22 +137,23 @@ impl InnerRender for WidgetDisassemble {
                                     }
                                 }
 
-                            {
-                                if instruction.is_call_near() {
-                                    let b64 = instruction.near_branch64();
-                                    println!("b64 = {:X}", b64);
+                                {
+                                    if instruction.is_call_near() {
+                                        let b64 = instruction.near_branch64();
+                                        println!("b64 = {:X}", b64);
 
-                                    let current_pos = ui.cursor_pos();
-                                    let draw_list = ui.get_window_draw_list();
-                                    const WHITE: [f32; 3] = [1.0, 1.0, 1.0];
-                                    draw_list.add_line([current_pos[0], current_pos[1]], [current_pos[0]-100., current_pos[1] - 100.], WHITE).build();
+                                        let current_pos = ui.cursor_pos();
+                                        let draw_list = ui.get_window_draw_list();
+                                        const WHITE: [f32; 3] = [1.0, 1.0, 1.0];
+                                        draw_list.add_line([current_pos[0], current_pos[1]], [current_pos[0] - 100., current_pos[1] - 100.], WHITE).build();
+                                    }
                                 }
-                            }
 
-                            if let Some(token) = token {
-                                token.pop();
-                            } else {
-                                break;
+                                if let Some(token) = token {
+                                    token.pop();
+                                } else {
+                                    break;
+                                }
                             }
                         }
                     }

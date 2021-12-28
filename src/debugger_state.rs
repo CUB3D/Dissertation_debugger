@@ -3,6 +3,7 @@ use std::time::Duration;
 use crossbeam_channel::{Receiver, Sender};
 #[cfg(target_os = "linux")]
 use ptrace::{Breakpoint, Process};
+use ptrace::FpRegs;
 #[cfg(target_os = "windows")]
 use crate::debugging_client::{Breakpoint, Process};
 
@@ -21,6 +22,8 @@ pub struct DebuggerState {
     pub process: Option<Process>,
     /// The last known state of the process registers, boxed as this can be too large to store on the stack in some cases
     pub cache_user_regs: Option<Box<UserRegs>>,
+    /// The last known state of the floating point registers, boxes as this can be too large to store on the stack in some cases
+    pub cache_fp_regs: Option<Box<FpRegs>>,
     pub elf: Option<BinaryFile>,
     pub auto_stp: bool,
     pub single_step_mode: bool,
@@ -62,29 +65,32 @@ impl DebuggerState {
             match msg {
                 DebuggerMsg::Trap {
                     user_regs,
-                    fp_regs: _,
+                    fp_regs,
                 } => {
                     self.cache_user_regs = Some(user_regs);
+                    self.cache_fp_regs = Some(fp_regs);
                     if self.auto_stp {
                         self.sender.as_ref().unwrap().send(Msg::Continue);
                     }
                 }
                 DebuggerMsg::SyscallTrap {
                     user_regs,
-                    fp_regs: _,
+                    fp_regs,
                 } => {
                     self.cache_user_regs = Some(user_regs);
+                    self.cache_fp_regs = Some(fp_regs);
                     if self.auto_stp {
                         self.sender.as_ref().unwrap().send(Msg::Continue);
                     }
                 }
                 DebuggerMsg::BPTrap {
                     user_regs,
-                    fp_regs: _,
+                    fp_regs,
                     breakpoint,
                 } => {
                     // int3 never auto continues
                     self.cache_user_regs = Some(user_regs);
+                    self.cache_fp_regs = Some(fp_regs);
                     self.current_breakpoint = Some(breakpoint);
                 }
                 DebuggerMsg::ProcessSpwn(p) => {

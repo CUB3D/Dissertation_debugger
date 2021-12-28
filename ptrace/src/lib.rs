@@ -154,15 +154,27 @@ pub struct UserRegs {
 #[derive(Clone, Debug, Eq, PartialEq)]
 #[repr(C)]
 pub struct FpRegs {
+    /// FPU Control Word
     pub cwd: libc::c_ushort,
+    /// FPU Status Word
     pub swd: libc::c_ushort,
+    /// FPU Tag Word
     pub ftw: libc::c_ushort,
+    /// Last Instruction Opcode
     pub fop: libc::c_ushort,
+    /// Instruction Pointer
     pub rip: libc::c_ulonglong,
+    /// Data Pointer
     pub rdp: libc::c_ulonglong,
+    /// MXCSR Register State
     pub mxcsr: libc::c_uint,
+    /// MXCSR Mask
     pub mxcr_mask: libc::c_uint,
+    /// 8*10 bytes for each FP-reg = 80 bytes
+    /// overalaps with 16 * 8 for each MMX register = 128 bytes
     pub st_space: [libc::c_uint; 32],
+    /// 32*8 for each ymm register = 256 bytes
+    /// overlaps with 16 * 8 for each xmm register (xmm0 = ymm0 lower half)
     pub xmm_space: [libc::c_uint; 64],
     pub padding: [libc::c_uint; 24],
 }
