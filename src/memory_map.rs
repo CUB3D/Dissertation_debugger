@@ -4,6 +4,36 @@ use crate::{DebuggerState, define_ui_menu};
 use imgui::{Ui, Window};
 
 use std::ffi::CString;
+use std::ops::Range;
+
+#[derive(Debug, Clone)]
+pub struct MemoryMap(pub Vec<MemoryMapEntry>);
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum MemoryMapEntryPermissionsKind {
+    Private,
+    Shared
+}
+impl core::fmt::Display for MemoryMapEntryPermissionsKind {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::Private => write!(f, "private"),
+            Self::Shared => write!(f, "shared"),
+        }
+    }
+}
+#[derive(Copy, Clone, Debug)]
+pub struct MemoryMapEntryPermissions {
+    pub read: bool,
+    pub write: bool,
+    pub execute: bool,
+    pub kind: MemoryMapEntryPermissionsKind
+}
+#[derive(Clone, Debug)]
+pub struct MemoryMapEntry {
+    pub range: Range<usize>,
+    pub permissions: MemoryMapEntryPermissions,
+    pub path: String,
+}
 
 #[derive(Default)]
 pub struct WidgetMemoryMap {
@@ -14,7 +44,7 @@ define_ui_menu!(WidgetMemoryMap, "Memory Map");
 impl InnerRender for WidgetMemoryMap {
     fn render_inner(&mut self, state: &mut DebuggerState, ui: &Ui) {
         if let Some(proc) = state.process {
-            if let Some(mmap) = ptrace::get_memory_map(proc.0) {
+            if let Some(mmap) = &state.memory_map {
                 ImGuiTableBuilder::with_name(
                     CString::new("mmap").unwrap(),
                     5,

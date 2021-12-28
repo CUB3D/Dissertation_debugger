@@ -5,9 +5,8 @@ pub trait DebuggingClient {
     //TODO: should this return an instance of the client
     fn start(&mut self, binary_path: &str) -> (Sender<Msg>, Receiver<DebuggerMsg>);
 }
-
 #[cfg(target_os = "linux")]
-use ptrace::{Breakpoint, FpRegs, Process, UserRegs};
+use ptrace::{Breakpoint, FpRegs, Process};
 
 #[cfg(target_os = "windows")]
 #[derive(Copy, Clone, Debug)]
@@ -15,20 +14,27 @@ pub struct Breakpoint {
     pub address: usize
 }
 #[cfg(target_os = "windows")]
+impl Breakpoint{
+    pub fn new(address: usize) -> Self {
+        Self {
+            address,
+        }
+    }
+}
+#[cfg(target_os = "windows")]
 #[derive(Clone, Debug)]
 pub struct FpRegs;
 #[cfg(target_os = "windows")]
 #[derive(Copy, Clone, Debug)]
 pub struct Process(pub i32);
-#[cfg(target_os = "windows")]
-#[derive(Clone, Debug)]
-pub struct UserRegs;
 
 use crate::stack::CallStack;
 #[cfg(target_os = "linux")]
 pub use linux::LinuxPtraceDebuggingClient as NativeDebuggingClient;
 #[cfg(target_os = "windows")]
 pub use win::WindowsNTDebuggingClient as NativeDebuggingClient;
+use crate::memory_map::MemoryMap;
+use crate::registers::UserRegs;
 
 #[derive(Clone)]
 pub enum Msg {
@@ -69,6 +75,8 @@ pub enum DebuggerMsg {
     CallStack(CallStack),
     /// The process has executed a syscall
     Syscall(String),
+    /// The process is updating the memory map
+    MemoryMap(MemoryMap)
 }
 
 #[cfg(target_os = "linux")]
@@ -155,6 +163,10 @@ pub mod linux {
                                     }
                                 }
                                 send_from_debug.send(DebuggerMsg::CallStack(CallStack(call_stack)));
+
+                                if let Some(mmap) = ptrace::get_memory_map(child.0) {
+                                    send_from_debug.send(DebuggerMsg::MemoryMap(mmap));
+                                }
 
                                 // Handle the various trap types
                                 let stopsig = status.wstopsig();
@@ -311,13 +323,15 @@ pub mod linux {
 
 #[cfg(target_os = "windows")]
 pub mod win {
-    use crate::debugging_client::{DebuggingClient, Process};
+    use crate::debugging_client::{DebuggingClient, FpRegs, Process};
     use core::default::Default;
     use std::ffi::CString;
     use crossbeam_channel::{Receiver, Sender, unbounded};
     use windows::Win32::Foundation;
-    use windows::Win32::Foundation::{HANDLE_FLAGS, PSTR};
+    use windows::Win32::Foundation::{HANDLE, HANDLE_FLAGS, PSTR};
     use crate::{DebuggerMsg, Msg};
+    use crate::memory_map::{MemoryMap, MemoryMapEntry, MemoryMapEntryPermissions, MemoryMapEntryPermissionsKind};
+    use crate::registers::UserRegs;
 
     #[derive(Default)]
     pub struct WindowsNTDebuggingClient {}
@@ -386,10 +400,111 @@ pub mod win {
                                 };
                                 if evt.dwDebugEventCode != 0 {
                                     println!("Got debug event {}", evt.dwDebugEventCode);
-                                    let status = ::windows::Win32::Foundation::DBG_CONTINUE;
+
+                                    let handle = unsafe { ::windows::Win32::System::Threading::OpenProcess(::windows::Win32::System::Threading::PROCESS_QUERY_INFORMATION | ::windows::Win32::System::Threading::THREAD_GET_CONTEXT, false, pi.dwProcessId) };
+
+                                    // Read memory map
+                                    let mut mmap = Vec::new();
                                     unsafe {
-                                        ::windows::Win32::System::Diagnostics::Debug::ContinueDebugEvent(evt.dwProcessId, evt.dwThreadId, status.0 as _);
+                                        let mut base = core::ptr::null_mut();
+                                        loop {
+                                            let mut mbi = Box::<::windows::Win32::System::Memory::MEMORY_BASIC_INFORMATION>::new_zeroed().assume_init();
+                                            let bytes_read = ::windows::Win32::System::Memory::VirtualQueryEx(handle, base, mbi.as_mut(), core::mem::size_of::<::windows::Win32::System::Memory::MEMORY_BASIC_INFORMATION>());
+                                            if bytes_read == 0 {
+                                                break;
+                                            }
+                                            println!("Base addr = {:X}", mbi.BaseAddress as usize);
+                                            println!("bytes read = {}", bytes_read);
+                                            println!("{}", mbi.Protect);
+                                            base = (mbi.BaseAddress as usize + mbi.RegionSize) as *mut _;
+
+                                            let (r, w, e) = match mbi.Protect {
+                                                ::windows::Win32::System::Memory::PAGE_EXECUTE => (false, false, true),
+                                                ::windows::Win32::System::Memory::PAGE_EXECUTE_READ => (true, false, true),
+                                                ::windows::Win32::System::Memory::PAGE_EXECUTE_READWRITE => (true, true, true),
+                                                ::windows::Win32::System::Memory::PAGE_EXECUTE_WRITECOPY => (true, true, true),
+                                                ::windows::Win32::System::Memory::PAGE_NOACCESS => (false, false, false),
+                                                ::windows::Win32::System::Memory::PAGE_READONLY => (true, false, false),
+                                                ::windows::Win32::System::Memory::PAGE_READWRITE => (true, true, false),
+                                                ::windows::Win32::System::Memory::PAGE_WRITECOPY => (true, true, false),
+                                                //TODO: double check this and page_guard settings
+                                                ::windows::Win32::System::Memory::PAGE_TARGETS_INVALID => (true, true, false),
+                                                ::windows::Win32::System::Memory::PAGE_TARGETS_NO_UPDATE => (true, true, false),
+                                                _ => {
+                                                    println!("Unsupported page perms: {:X}, assuming ---", mbi.Protect);
+                                                    (false, false, false)
+                                                }
+                                            };
+
+                                            mmap.push(MemoryMapEntry {
+                                                range: (mbi.BaseAddress as usize)..(mbi.BaseAddress as usize + mbi.RegionSize),
+                                                path: "".to_string(),
+                                                permissions: MemoryMapEntryPermissions {
+                                                    read: r,
+                                                    write: w,
+                                                    execute: e,
+                                                    kind: MemoryMapEntryPermissionsKind::Private,
+                                                }
+                                            })
+                                        }
                                     }
+                                    send_from_debug.send(DebuggerMsg::MemoryMap(MemoryMap(mmap)));
+
+
+                                    //TODO: sending register state should be its own event, not connected to traps, as windows has uses events, rather than traps, so not all debuggee pauses are due to a bp/syscall_trap
+                                    unsafe {
+                                        //TODO: not working
+                                        let mut ctx = Box::<::windows::Win32::System::Diagnostics::Debug::CONTEXT>::new_zeroed().assume_init();
+                                        ctx.ContextFlags = 0x00010000 | 0x00000001 | 0x00000002 | 0x00000004 | 0x00000008 | 0x00000010 | 0x00000020 | 0x00000040;
+                                        let r = ::windows::Win32::System::Diagnostics::Debug::GetThreadContext(handle, ctx.as_mut());
+                                        // assert_eq!(r.as_bool(), true, "Get thread context");
+
+                                        let mut user_regs = Box::new(UserRegs::default());
+                                        user_regs.ax = ctx.Rax;
+                                        user_regs.bx = ctx.Rbx;
+                                        user_regs.cx = ctx.Rcx;
+                                        user_regs.dx = ctx.Rdx;
+
+                                        user_regs.bp = ctx.Rbp;
+                                        user_regs.sp = ctx.Rsp;
+                                        user_regs.si = ctx.Rsi;
+                                        user_regs.di = ctx.Rdi;
+
+                                        user_regs.r8 = ctx.R8;
+                                        user_regs.r9 = ctx.R9;
+                                        user_regs.r10 = ctx.R10;
+                                        user_regs.r11 = ctx.R11;
+                                        user_regs.r12 = ctx.R12;
+                                        user_regs.r13 = ctx.R13;
+                                        user_regs.r14 = ctx.R14;
+                                        user_regs.r15 = ctx.R15;
+
+                                        user_regs.ip = ctx.Rip;
+
+                                        user_regs.flags = ctx.EFlags as u64;
+
+                                        user_regs.gs = ctx.SegGs as u64;
+                                        user_regs.fs = ctx.SegFs as u64;
+                                        user_regs.ds = ctx.SegDs as u64;
+                                        user_regs.cs = ctx.SegCs as u64;
+                                        user_regs.ss = ctx.SegSs as u64;
+
+                                        send_from_debug.send(DebuggerMsg::Trap { user_regs, fp_regs: Box::new(FpRegs {}) });
+                                    }
+
+
+                                    match evt.dwDebugEventCode {
+                                        ::windows::Win32::System::Diagnostics::Debug::CREATE_PROCESS_DEBUG_EVENT => {
+                                            let status = ::windows::Win32::Foundation::DBG_CONTINUE;
+                                            unsafe {
+                                                ::windows::Win32::System::Diagnostics::Debug::ContinueDebugEvent(evt.dwProcessId, evt.dwThreadId, status.0 as _);
+                                            }
+                                        }
+                                        _ => {}
+                                    }
+
+
+
                                 }
                             }
                     }
