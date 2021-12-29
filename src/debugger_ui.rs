@@ -109,7 +109,7 @@ impl DebuggerUi {
 
 pub mod widget {
     use crate::debugger_ui::DebuggerState;
-    use imgui::{ImStr, Ui};
+    use imgui::{Ui};
 
     pub trait UiMenu {
         fn render_if_visible(&mut self, state: &mut DebuggerState, ui: &Ui) {

@@ -1,7 +1,7 @@
 #[cfg(target_os = "windows")]
 use crate::debugging_client::{Breakpoint, Process};
 use crossbeam_channel::{Receiver, Sender};
-use libc::user;
+
 use ptrace::FpRegs;
 #[cfg(target_os = "linux")]
 use ptrace::{Breakpoint, Process};
@@ -10,7 +10,7 @@ use std::time::Duration;
 
 use crate::common_binary_file::BinaryFile;
 use crate::debugging_client::NativeDebuggingClient;
-use crate::elf::Elf;
+
 use crate::memory_map::MemoryMap;
 use crate::registers::UserRegs;
 use crate::stack::CallStack;

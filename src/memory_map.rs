@@ -43,7 +43,7 @@ define_ui_menu!(WidgetMemoryMap, "Memory Map");
 
 impl InnerRender for WidgetMemoryMap {
     fn render_inner(&mut self, state: &mut DebuggerState, ui: &Ui) {
-        if let Some(proc) = state.process {
+        if let Some(_proc) = state.process {
             if let Some(mmap) = &state.memory_map {
                 ImGuiTableBuilder::with_name(
                     CString::new("mmap").unwrap(),

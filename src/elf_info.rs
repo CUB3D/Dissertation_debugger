@@ -1,7 +1,7 @@
-use crate::common_binary_file::BinaryFile;
+
 use crate::debugger_ui::widget::{InnerRender, UiMenu};
 use crate::{define_ui_menu, DebuggerState};
-use iced_x86::NumberBase::Binary;
+
 use imgui::{Ui, Window};
 
 #[derive(Default)]
