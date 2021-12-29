@@ -15,6 +15,7 @@ use crate::debugging_client::NativeDebuggingClient;
 use crate::memory_map::MemoryMap;
 use crate::registers::UserRegs;
 use crate::stack::CallStack;
+use crate::syscall::Syscall;
 
 pub struct ProcessState {
     pub process: Process,
@@ -27,7 +28,7 @@ pub struct ProcessState {
 
 #[derive(Default)]
 pub struct DebuggerState {
-    pub syscall_list: Vec<String>,
+    pub syscall_list: Vec<Syscall>,
     pub breakpoints: Vec<Breakpoint>,
     pub process: Option<Process>,
     pub process_state: Vec<ProcessState>,

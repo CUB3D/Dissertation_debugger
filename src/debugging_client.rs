@@ -35,6 +35,7 @@ pub use linux::LinuxPtraceDebuggingClient as NativeDebuggingClient;
 pub use win::WindowsNTDebuggingClient as NativeDebuggingClient;
 use crate::memory_map::MemoryMap;
 use crate::registers::UserRegs;
+use crate::syscall::Syscall;
 
 #[derive(Clone)]
 pub enum Msg {
@@ -68,7 +69,7 @@ pub enum DebuggerMsg {
     /// The process has stopped, we have a new call stack to display
     CallStack(CallStack),
     /// The process has executed a syscall
-    Syscall(String),
+    Syscall(Syscall),
     /// The process is updating the memory map
     MemoryMap( MemoryMap),
     /// The given process has received new user registers
@@ -89,10 +90,12 @@ pub mod linux {
     use ptrace::{MemoryMapEntryPermissionsKind, Process, Ptrace, UserRegs};
 
     use std::iter::Iterator;
+    use libc::user;
 
     use unwind::{Accessors, AddressSpace, Byteorder, Cursor as StackCursor, PTraceState, RegNum};
     use crate::DebuggerState;
     use crate::memory_map::{MemoryMap, MemoryMapEntry, MemoryMapEntryPermissions};
+    use crate::syscall::{Syscall, SyscallArg};
 
     #[derive(Default)]
     pub struct LinuxPtraceDebuggingClient {}
@@ -193,41 +196,123 @@ pub mod linux {
             Ok(CallStack(call_stack))
         }
 
-        fn get_syscall_description(pid: Process, user_regs: &Box<ptrace::UserRegs>) -> String {
-           return match user_regs.orig_ax as libc::c_long {
-                libc::SYS_brk => format!("brk({})", user_regs.di),
-                libc::SYS_arch_prctl => {
-                    format!("SYS_arch_prctl({})", user_regs.di)
-                }
-                libc::SYS_mmap => format!("SYS_mmap(?)"),
-                libc::SYS_access => format!("SYS_access(?)"),
-                libc::SYS_newfstatat => format!("SYS_newfstatat(?)"),
-                libc::SYS_mprotect => format!("SYS_mprotect(?)"),
-                libc::SYS_write => format!("SYS_write(?)"),
-                libc::SYS_read => format!("SYS_read(?)"),
-                libc::SYS_munmap => format!("SYS_munmap(?)"),
-                libc::SYS_exit_group => format!("SYS_exit_group(?)"),
-                libc::SYS_pread64 => format!("SYS_pread64(?)"),
-                libc::SYS_close => {
-                    format!("close({})", user_regs.di)
-                }
+        fn get_syscall_description(pid: Process, user_regs: &Box<ptrace::UserRegs>) -> Syscall {
+            macro_rules! syscall {
+                ($name: expr) => {
+                        return Syscall {
+                            name: $name.to_string(),
+                            args: vec![]
+                        };
+                };
+
+                ($name: expr, $($x:ident),+) => {
+                        return Syscall {
+                            name: $name.to_string(),
+                            args: syscall!(@arg, $($x),+ )
+                        };
+                };
+
+                (@arg, $x: ident) => {
+                    vec![syscall!(@arg_type, $x, user_regs.di)]
+                };
+
+                (@arg, $x: ident, $y: ident) => {
+                    vec![syscall!(@arg_type, $x, user_regs.di), syscall!(@arg_type, $y, user_regs.si)]
+                };
+
+                (@arg, $x: ident, $y: ident, $z: ident) => {
+                    vec![syscall!(@arg_type, $x, user_regs.di), syscall!(@arg_type, $y, user_regs.si), syscall!(@arg_type, $z, user_regs.dx)]
+                };
+
+                (@arg, $x: ident, $y: ident, $z: ident, $a: ident) => {
+                    vec![syscall!(@arg_type, $x, user_regs.di), syscall!(@arg_type, $y, user_regs.si), syscall!(@arg_type, $z, user_regs.dx), syscall!(@arg_type, $a, user_regs.r10)]
+                };
+
+                (@arg, $x: ident, $y: ident, $z: ident, $a: ident, b: ident) => {
+                    vec![syscall!(@arg_type, $x, user_regs.di), syscall!(@arg_type, $y, user_regs.si), syscall!(@arg_type, $z, user_regs.dx), syscall!(@arg_type, $a, user_regs.r10), syscall!(@arg_type, $b, user_regs.r8)]
+                };
+
+                (@arg, $x: ident, $y: ident, $z: ident, $a: ident, $b: ident, $c: ident) => {
+                    vec![syscall!(@arg_type, $x, user_regs.di), syscall!(@arg_type, $y, user_regs.si), syscall!(@arg_type, $z, user_regs.dx), syscall!(@arg_type, $a, user_regs.r10), syscall!(@arg_type, $b, user_regs.r8), syscall!(@arg_type, $b, user_regs.r9)]
+                };
+
+                (@arg_type, u64, $value: expr) => {
+                    SyscallArg::U64($value)
+                };
+
+                (@arg_type, addr, $value: expr) => {
+                    SyscallArg::Address($value)
+                };
+
+                (@arg_type, filedesc, $value: expr) => {
+                    SyscallArg::FileDescriptor($value as i64)
+                };
+
+                (@arg_type, pid, $value: expr) => {
+                    SyscallArg::ProcessId($value as u64)
+                };
+
+                (@arg_type, filepath, $value: expr) => {
+                    SyscallArg::FilePath(unsafe { pid.read_string($value as i64) })
+                };
+
+                (@arg_type, string, $value: expr) => {
+                    SyscallArg::String(unsafe { pid.read_string($value as i64) })
+                };
+            }
+
+            match user_regs.orig_ax as libc::c_long {
+                libc::SYS_read => syscall!("read", u64, addr, u64),
+                libc::SYS_brk => syscall!("brk", u64),
+                libc::SYS_truncate => syscall!("truncate", filepath),
+                libc::SYS_recvfrom => syscall!("recvfrom", filedesc, addr, u64, u64, addr, addr),
+                libc::SYS_dup => syscall!("dup", filedesc),
+                libc::SYS_dup2 => syscall!("dup2", filedesc, filedesc),
+                libc::SYS_lgetxattr => syscall!("lgetxattr", filepath, string, addr, u64),
+                libc::SYS_access => syscall!("access", filepath, u64),
+                libc::SYS_arch_prctl => syscall!("arch_prctl", u64, addr),
+                libc::SYS_close => syscall!("close", filedesc),
+                libc::SYS_exit_group => syscall!("exit_group", u64),
+                libc::SYS_newfstatat => syscall!("newfsstatat", filedesc, filepath, addr, u64),
+                libc::SYS_munmap => syscall!("newfsstatat", addr, u64),
+                libc::SYS_preadv => syscall!("preadv", filedesc, addr, u64, u64),
+                libc::SYS_pread64 => syscall!("pread64", filedesc, addr, u64, u64),
+                libc::SYS_mprotect => syscall!("mprotect", addr, u64, u64),
+                libc::SYS_mmap => syscall!("mmap", addr, u64, u64, u64, filedesc, u64),
+                libc::SYS_write => syscall!("write", filedesc, addr, u64),
+                libc::SYS_read => syscall!("read", filedesc, addr, u64),
+                libc::SYS_set_tid_address => syscall!("set_tid_address", addr),
+                libc::SYS_set_robust_list => syscall!("set_robust_list", addr, u64),
+                libc::SYS_rt_sigaction => syscall!("rt_sigaction", u64, addr, addr),
+                libc::SYS_rt_sigprocmask => syscall!("rt_sigprocmask", u64, addr, addr),
+                libc::SYS_prlimit64 => syscall!("prlimit64", pid, u64, addr, addr),
+                libc::SYS_getpid => syscall!("getpid"),
+                // libc::SYS_clone => syscall!("clone", addr, addr, u64, addr, addr, addr, addr),
+
                 libc::SYS_openat => {
                     let fd_name = match user_regs.di as i32 {
                         -100 => "AT_FDCWD".to_string(),
                         _ => format!("{}", user_regs.di),
                     };
+                    let path = unsafe { pid.read_string(user_regs.si as i64) };
 
-                    let str_arg = unsafe {
-                        ptrace::ptrace_read_string(
-                            pid.0,
-                            user_regs.si as i64,
-                        )
+                    return Syscall {
+                        name: "openat".to_string(),
+                        args: vec![SyscallArg::String(fd_name), SyscallArg::FilePath(path), SyscallArg::U64(user_regs.dx)]
                     };
-
-                    format!("openat({}, {}, ?)", fd_name, str_arg)
                 }
+                _ => {}
+            }
+
+           let name = match user_regs.orig_ax as libc::c_long {
+                libc::SYS_pread64 => format!("SYS_pread64(?)"),
                 _ => format!("Unknown({})", user_regs.orig_ax),
             };
+
+            return Syscall {
+                name,
+                args: vec![],
+            }
         }
     }
 

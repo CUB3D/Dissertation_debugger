@@ -380,6 +380,14 @@ impl Process {
         (Process(pid), WaitStatus(status))
     }
 
+    /// Read a null terminated string from the given address in the address space of this process
+    /// SAFTEY: This function will continue reading memory until either an error, or a null byte is reached
+    /// It is up to the caller to ensure that the given address points to a valid string in the address space of the target
+    /// also see 'ptrace_read_string'
+    pub unsafe fn read_string(&self, address: i64) -> String {
+        ptrace_read_string(self.0, address)
+    }
+
     pub fn ptrace_traceme() {
         assert_ne!(-1, unsafe { libc::ptrace(libc::PTRACE_TRACEME, 0, 0, 0)});
     }
