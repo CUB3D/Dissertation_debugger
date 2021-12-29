@@ -31,10 +31,6 @@ pub struct DebuggerState {
     pub breakpoints: Vec<Breakpoint>,
     pub process: Option<Process>,
     pub process_state: Vec<ProcessState>,
-    /// The last known state of the process registers, boxed as this can be too large to store on the stack in some cases
-    pub cache_user_regs: Option<Box<UserRegs>>,
-    /// The last known state of the floating point registers, boxes as this can be too large to store on the stack in some cases
-    pub cache_fp_regs: Option<Box<FpRegs>>,
     pub elf: Option<BinaryFile>,
     pub auto_stp: bool,
     pub single_step_mode: bool,
@@ -74,37 +70,23 @@ impl DebuggerState {
             .recv_timeout(Duration::from_nanos(1))
         {
             match msg {
-                DebuggerMsg::Trap {
-                    user_regs,
-                    fp_regs,
-                } => {
-                    self.cache_user_regs = Some(user_regs);
-                    self.cache_fp_regs = Some(fp_regs);
+                DebuggerMsg::Trap => {
                     if self.auto_stp {
                         self.sender.as_ref().unwrap().send(Msg::Continue);
                     }
                 }
-                DebuggerMsg::SyscallTrap {
-                    user_regs,
-                    fp_regs,
-                } => {
-                    self.cache_user_regs = Some(user_regs);
-                    self.cache_fp_regs = Some(fp_regs);
+                DebuggerMsg::SyscallTrap=> {
                     if self.auto_stp {
                         self.sender.as_ref().unwrap().send(Msg::Continue);
                     }
                 }
                 DebuggerMsg::BPTrap {
-                    user_regs,
-                    fp_regs,
                     breakpoint,
                 } => {
                     // int3 never auto continues
-                    self.cache_user_regs = Some(user_regs);
-                    self.cache_fp_regs = Some(fp_regs);
                     self.current_breakpoint = Some(breakpoint);
                 }
-                DebuggerMsg::ProcessSpwn(p) => {
+                DebuggerMsg::ProcessSpawn(p) => {
                     self.process = Some(p);
                     self.process_state.push(ProcessState {
                         process: p,
@@ -129,8 +111,12 @@ impl DebuggerState {
                 DebuggerMsg::MemoryMap(mmap) => {
                     self.memory_map = Some(mmap);
                 }
+                //TODO: maybe merge these?
                 DebuggerMsg::UserRegisters(pid, user_regs) => {
                     self.process_state.iter_mut().find(|p| p.process == pid).expect("No process to set regs for").cache_user_regs = Some(user_regs);
+                }
+                DebuggerMsg::FpRegisters(pid, fp_regs) => {
+                    self.process_state.iter_mut().find(|p| p.process == pid).expect("No process to set regs for").cache_fp_regs = Some(fp_regs);
                 }
             }
         }

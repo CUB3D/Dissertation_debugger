@@ -55,7 +55,7 @@ impl InnerRender for WidgetDisassemble {
                         .insert(prog.start_addr + load_address, prog.name.clone());
                 }
 
-                if let Some(user_regs) = &state.cache_user_regs {
+                if let Some(user_regs) = &state.process_state.first().unwrap().cache_user_regs {
                     // The address that the process is loaded into memory at
                     let _base_address = load_address + elf_parsed.entry_point;
                     //TODO: just use memory directly, no elf parse+handle self modifing

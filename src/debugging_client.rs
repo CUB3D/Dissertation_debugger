@@ -54,23 +54,15 @@ pub enum Msg {
 #[derive(Clone, Debug)]
 pub enum DebuggerMsg {
     /// The child has hit a singlestep breakpoint, control returned to caller
-    Trap {
-        user_regs: Box<UserRegs>,
-        fp_regs: Box<FpRegs>,
-    },
+    Trap,
     /// The child has hit a int3 breakpoint, control returned to caller
     BPTrap {
-        user_regs: Box<UserRegs>,
-        fp_regs: Box<FpRegs>,
         breakpoint: Breakpoint,
     },
     /// The child has hit a syscall breakpoint, control returned to caller
-    SyscallTrap {
-        user_regs: Box<UserRegs>,
-        fp_regs: Box<FpRegs>,
-    },
+    SyscallTrap,
     /// The process has spawned
-    ProcessSpwn(Process),
+    ProcessSpawn(Process),
     /// A child process has spawned
     ChildProcessSpawn(Process),
     /// The process has stopped, we have a new call stack to display
@@ -78,20 +70,23 @@ pub enum DebuggerMsg {
     /// The process has executed a syscall
     Syscall(String),
     /// The process is updating the memory map
-    MemoryMap(MemoryMap),
-
-    /// The given process has recieved new registers
-    UserRegisters(Process, Box<UserRegs>)
+    MemoryMap( MemoryMap),
+    /// The given process has received new user registers
+    UserRegisters(Process, Box<UserRegs>),
+    /// The given process has received new floating point registers
+    FpRegisters(Process, Box<FpRegs>)
 }
 
 #[cfg(target_os = "linux")]
 pub mod linux {
+    use std::collections::HashMap;
+    use std::error::Error;
     use crate::debugging_client::DebuggingClient;
     use crate::debugging_client::{DebuggerMsg, Msg};
     use crate::stack::{CallStack, StackFrame};
     use crossbeam_channel::{unbounded, Receiver, Sender};
 
-    use ptrace::{MemoryMapEntryPermissionsKind, Process, Ptrace};
+    use ptrace::{MemoryMapEntryPermissionsKind, Process, Ptrace, UserRegs};
 
     use std::iter::Iterator;
 
@@ -104,7 +99,7 @@ pub mod linux {
 
     impl LinuxPtraceDebuggingClient {
         //TODO: idea: make this struct repr(c) then we can cast easily
-        fn convert_ptrace_registers(oregs: Box<ptrace::UserRegs>) -> Box<crate::registers::UserRegs> {
+        fn convert_ptrace_registers(oregs: &Box<ptrace::UserRegs>) -> Box<crate::registers::UserRegs> {
             let mut regs = Box::<crate::registers::UserRegs>::default();
             regs.ax = oregs.ax;
             regs.bx = oregs.bx;
@@ -139,6 +134,101 @@ pub mod linux {
 
             regs
         }
+
+        fn get_memory_map(pid: Process) -> Option<MemoryMap> {
+            if let Some(mmap) = ptrace::get_memory_map(pid.0) {
+                let mmap = MemoryMap(mmap.0.iter().map(|mp| MemoryMapEntry {
+                    path: mp.path.clone(),
+                    range: mp.range.clone(),
+                    permissions: MemoryMapEntryPermissions {
+                        read: mp.permissions.read,
+                        write: mp.permissions.write,
+                        execute: mp.permissions.execute,
+                        kind: match mp.permissions.kind {
+                            ptrace::MemoryMapEntryPermissionsKind::Private => crate::memory_map::MemoryMapEntryPermissionsKind::Private,
+                            ptrace::MemoryMapEntryPermissionsKind::Shared =>  crate::memory_map::MemoryMapEntryPermissionsKind::Shared,
+                        }
+                    }
+                }).collect());
+
+                return Some(mmap);
+            }
+            None
+        }
+
+        fn get_call_stack(pid: Process) -> Result<CallStack, Box<dyn Error>> {
+            let mut call_stack = Vec::new();
+
+            let state = PTraceState::new(pid.0 as u32)?;
+            let space = AddressSpace::new(Accessors::ptrace(), Byteorder::DEFAULT)?;
+            let mut cursor = StackCursor::remote(&space, &state)?;
+            loop {
+                let ip = cursor.register(RegNum::IP)?;
+
+                match (cursor.procedure_info(), cursor.procedure_name()) {
+                    (Ok(ref info), Ok(ref name))
+                    if ip == info.start_ip() + name.offset() =>
+                        {
+                            call_stack.push(StackFrame {
+                                addr: ip as usize,
+                                description: format!(
+                                    "{} ({:#016x}) + {:#x}",
+                                    name.name(),
+                                    info.start_ip(),
+                                    name.offset()
+                                ),
+                            });
+                        }
+                    _ => call_stack.push(StackFrame {
+                        addr: ip as usize,
+                        description: "????".to_string(),
+                    }),
+                }
+
+                if !cursor.step()? {
+                    break
+                }
+            }
+
+            Ok(CallStack(call_stack))
+        }
+
+        fn get_syscall_description(pid: Process, user_regs: &Box<ptrace::UserRegs>) -> String {
+           return match user_regs.orig_ax as libc::c_long {
+                libc::SYS_brk => format!("brk({})", user_regs.di),
+                libc::SYS_arch_prctl => {
+                    format!("SYS_arch_prctl({})", user_regs.di)
+                }
+                libc::SYS_mmap => format!("SYS_mmap(?)"),
+                libc::SYS_access => format!("SYS_access(?)"),
+                libc::SYS_newfstatat => format!("SYS_newfstatat(?)"),
+                libc::SYS_mprotect => format!("SYS_mprotect(?)"),
+                libc::SYS_write => format!("SYS_write(?)"),
+                libc::SYS_read => format!("SYS_read(?)"),
+                libc::SYS_munmap => format!("SYS_munmap(?)"),
+                libc::SYS_exit_group => format!("SYS_exit_group(?)"),
+                libc::SYS_pread64 => format!("SYS_pread64(?)"),
+                libc::SYS_close => {
+                    format!("close({})", user_regs.di)
+                }
+                libc::SYS_openat => {
+                    let fd_name = match user_regs.di as i32 {
+                        -100 => "AT_FDCWD".to_string(),
+                        _ => format!("{}", user_regs.di),
+                    };
+
+                    let str_arg = unsafe {
+                        ptrace::ptrace_read_string(
+                            pid.0,
+                            user_regs.si as i64,
+                        )
+                    };
+
+                    format!("openat({}, {}, ?)", fd_name, str_arg)
+                }
+                _ => format!("Unknown({})", user_regs.orig_ax),
+            };
+        }
     }
 
     impl DebuggingClient for LinuxPtraceDebuggingClient {
@@ -160,143 +250,51 @@ pub mod linux {
                         let mut local_debugger_state = DebuggerState::default();
 
                         send_from_debug
-                            .send(DebuggerMsg::ProcessSpwn(child))
+                            .send(DebuggerMsg::ProcessSpawn(child))
                             .expect("Send proc");
 
                         child.ptrace_singlestep();
 
                         let mut is_singlestep = false;
-                        let mut in_syscall = false;
+                        let mut in_syscall = HashMap::<Process, bool>::new();
+
                         drop(child);
 
                         loop {
                             let (pid, status) = Process::wait_any();
-                            println!("Got status from child {}", pid.0);
-
-                            // if pid.0 != child.0 {
-                            //     println!("Got status from child {}", pid.0);
-                            //     pid.ptrace_cont();
-                            //     continue;
-                            // }
 
                             if status.wifstopped() {
-                                // Walk the call stack
-                                let mut call_stack = Vec::new();
-
-                                let state = PTraceState::new(pid.0 as u32).unwrap();
-                                let space =
-                                    AddressSpace::new(Accessors::ptrace(), Byteorder::DEFAULT)
-                                        .unwrap();
-                                let mut cursor = StackCursor::remote(&space, &state).unwrap();
-                                loop {
-                                    let ip = cursor.register(RegNum::IP).unwrap();
-
-                                    match (cursor.procedure_info(), cursor.procedure_name()) {
-                                        (Ok(ref info), Ok(ref name))
-                                            if ip == info.start_ip() + name.offset() =>
-                                        {
-                                            call_stack.push(StackFrame {
-                                                addr: ip as usize,
-                                                description: format!(
-                                                    "{} ({:#016x}) + {:#x}",
-                                                    name.name(),
-                                                    info.start_ip(),
-                                                    name.offset()
-                                                ),
-                                            });
-                                        }
-                                        _ => call_stack.push(StackFrame {
-                                            addr: ip as usize,
-                                            description: "????".to_string(),
-                                        }),
-                                    }
-
-                                    if let Ok(step) = cursor.step() {
-                                        if !step {
-                                            break
-                                        }
-                                    } else {
-                                        break
-                                    }
+                                if let Ok(call_stack) = LinuxPtraceDebuggingClient::get_call_stack(pid) {
+                                    send_from_debug.send(DebuggerMsg::CallStack(call_stack));
                                 }
-                                send_from_debug.send(DebuggerMsg::CallStack(CallStack(call_stack)));
 
-                                if let Some(mmap) = ptrace::get_memory_map(pid.0) {
-                                    let mmap = MemoryMap(mmap.0.iter().map(|mp| MemoryMapEntry {
-                                        path: mp.path.clone(),
-                                        range: mp.range.clone(),
-                                        permissions: MemoryMapEntryPermissions {
-                                            read: mp.permissions.read,
-                                            write: mp.permissions.write,
-                                            execute: mp.permissions.execute,
-                                            kind: match mp.permissions.kind {
-                                                ptrace::MemoryMapEntryPermissionsKind::Private => crate::memory_map::MemoryMapEntryPermissionsKind::Private,
-                                                ptrace::MemoryMapEntryPermissionsKind::Shared =>  crate::memory_map::MemoryMapEntryPermissionsKind::Shared,
-                                            }
-                                        }
-                                    }).collect());
-
+                                if let Some(mmap) = LinuxPtraceDebuggingClient::get_memory_map(pid) {
                                     send_from_debug.send(DebuggerMsg::MemoryMap(mmap));
                                 }
+
+                                let user_regs = pid.ptrace_getregs();
+                                let fp_regs = pid.ptrace_getfpregs();
+
+                                let user_regs_ui = LinuxPtraceDebuggingClient::convert_ptrace_registers(&user_regs);
+                                send_from_debug.send(DebuggerMsg::UserRegisters(pid, user_regs_ui.clone()));
+                                send_from_debug.send(DebuggerMsg::FpRegisters(pid, fp_regs.clone()));
+
 
                                 // Handle the various trap types
                                 let stopsig = status.wstopsig();
                                 if stopsig == (libc::SIGTRAP | 0x80) {
-                                    if !in_syscall {
+                                    //TODO: do we need to track this for each process?
+                                    if !in_syscall.get(&pid).unwrap_or(&false) {
                                         // Figure out the details of the syscall
-                                        let user_regs = pid.ptrace_getregs();
-                                        let syscall_desc = match user_regs.orig_ax as libc::c_long {
-                                            libc::SYS_brk => format!("brk({})", user_regs.di),
-                                            libc::SYS_arch_prctl => {
-                                                format!("SYS_arch_prctl({})", user_regs.di)
-                                            }
-                                            libc::SYS_mmap => format!("SYS_mmap(?)"),
-                                            libc::SYS_access => format!("SYS_access(?)"),
-                                            libc::SYS_newfstatat => format!("SYS_newfstatat(?)"),
-                                            libc::SYS_mprotect => format!("SYS_mprotect(?)"),
-                                            libc::SYS_write => format!("SYS_write(?)"),
-                                            libc::SYS_read => format!("SYS_read(?)"),
-                                            libc::SYS_munmap => format!("SYS_munmap(?)"),
-                                            libc::SYS_exit_group => format!("SYS_exit_group(?)"),
-                                            libc::SYS_pread64 => format!("SYS_pread64(?)"),
-                                            libc::SYS_close => {
-                                                format!("close({})", user_regs.di)
-                                            }
-                                            libc::SYS_openat => {
-                                                let fd_name = match user_regs.di as i32 {
-                                                    -100 => "AT_FDCWD".to_string(),
-                                                    _ => format!("{}", user_regs.di),
-                                                };
-
-                                                let str_arg = unsafe {
-                                                    ptrace::ptrace_read_string(
-                                                        pid.0,
-                                                        user_regs.si as i64,
-                                                    )
-                                                };
-
-                                                format!("openat({}, {}, ?)", fd_name, str_arg)
-                                            }
-                                            _ => format!("Unknown({})", user_regs.orig_ax),
-                                        };
+                                        let syscall_desc = LinuxPtraceDebuggingClient::get_syscall_description(pid, &user_regs);
                                         send_from_debug.send(DebuggerMsg::Syscall(syscall_desc));
-
-                                        let user_regs_ui = LinuxPtraceDebuggingClient::convert_ptrace_registers(user_regs.clone());
-
-                                        send_from_debug
-                                            .send(DebuggerMsg::SyscallTrap {
-                                                user_regs: user_regs_ui.clone(),
-                                                fp_regs: pid.ptrace_getfpregs(),
-                                            })
-                                            .expect("Failed to send from debug");
-
-                                        send_from_debug.send(DebuggerMsg::UserRegisters(pid, user_regs_ui));
+                                        send_from_debug.send(DebuggerMsg::SyscallTrap).expect("Failed to send from debug");
+                                        in_syscall.insert(pid, true);
                                     } else {
                                         pid.ptrace_syscall();
-                                        in_syscall = false;
+                                        in_syscall.insert(pid, false);
                                         continue;
                                     }
-                                    in_syscall = !in_syscall;
                                     // println!("syscall");
                                 } else if stopsig == libc::SIGTRAP {
                                     // println!("sigtrap");
@@ -327,26 +325,14 @@ pub mod linux {
                                             };
                                             regs.ip -= 1;
 
-                                            //TODO: Testing, we shouldnt step after removing the bp so that the state can be seen before the bp
-                                            // child.ptr/ace_singlestep();
-                                            // child.wait_for();
-                                            // bp.install(child);
-                                            // TODO: Testing
-
                                             send_from_debug
                                                 .send(DebuggerMsg::BPTrap {
-                                                    user_regs: LinuxPtraceDebuggingClient::convert_ptrace_registers(regs),
-                                                    fp_regs: pid.ptrace_getfpregs(),
                                                     breakpoint: *bp,
                                                 })
                                                 .expect("Faeild to send from debug");
                                         } else {
                                             send_from_debug
-                                                .send(DebuggerMsg::Trap {
-                                                    user_regs: LinuxPtraceDebuggingClient::convert_ptrace_registers(regs),
-                                                    fp_regs: pid.ptrace_getfpregs(),
-                                                })
-                                                .expect("Faeild to send from debug");
+                                                .send(DebuggerMsg::Trap).expect("Faeild to send from debug");
                                         }
                                     } else {
                                         match event {
@@ -491,7 +477,7 @@ pub mod win {
                         }
 
                         send_from_debug
-                                .send(DebuggerMsg::ProcessSpwn(Process(pi.dwProcessId as i32)))
+                                .send(DebuggerMsg::ProcessSpawn(Process(pi.dwProcessId as i32)))
                                 .expect("Send proc");
 
                             loop {
