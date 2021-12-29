@@ -1,21 +1,21 @@
-use std::io::Cursor;
-use std::time::Duration;
-use crossbeam_channel::{Receiver, Sender};
-use libc::user;
-#[cfg(target_os = "linux")]
-use ptrace::{Breakpoint, Process};
-use ptrace::FpRegs;
 #[cfg(target_os = "windows")]
 use crate::debugging_client::{Breakpoint, Process};
+use crossbeam_channel::{Receiver, Sender};
+use libc::user;
+use ptrace::FpRegs;
+#[cfg(target_os = "linux")]
+use ptrace::{Breakpoint, Process};
+use std::io::Cursor;
+use std::time::Duration;
 
-use crate::elf::Elf;
-use crate::{DebuggerMsg, DebuggingClient, Msg};
 use crate::common_binary_file::BinaryFile;
 use crate::debugging_client::NativeDebuggingClient;
+use crate::elf::Elf;
 use crate::memory_map::MemoryMap;
 use crate::registers::UserRegs;
 use crate::stack::CallStack;
 use crate::syscall::Syscall;
+use crate::{DebuggerMsg, DebuggingClient, Msg};
 
 pub struct ProcessState {
     pub process: Process,
@@ -23,7 +23,6 @@ pub struct ProcessState {
     pub cache_user_regs: Option<Box<UserRegs>>,
     /// The last known state of the floating point registers, boxed as this can be too large to store on the stack in some cases
     pub cache_fp_regs: Option<Box<FpRegs>>,
-
 }
 
 #[derive(Default)]
@@ -76,14 +75,12 @@ impl DebuggerState {
                         self.sender.as_ref().unwrap().send(Msg::Continue);
                     }
                 }
-                DebuggerMsg::SyscallTrap=> {
+                DebuggerMsg::SyscallTrap => {
                     if self.auto_stp {
                         self.sender.as_ref().unwrap().send(Msg::Continue);
                     }
                 }
-                DebuggerMsg::BPTrap {
-                    breakpoint,
-                } => {
+                DebuggerMsg::BPTrap { breakpoint } => {
                     // int3 never auto continues
                     self.current_breakpoint = Some(breakpoint);
                 }
@@ -114,10 +111,18 @@ impl DebuggerState {
                 }
                 //TODO: maybe merge these?
                 DebuggerMsg::UserRegisters(pid, user_regs) => {
-                    self.process_state.iter_mut().find(|p| p.process == pid).expect("No process to set regs for").cache_user_regs = Some(user_regs);
+                    self.process_state
+                        .iter_mut()
+                        .find(|p| p.process == pid)
+                        .expect("No process to set regs for")
+                        .cache_user_regs = Some(user_regs);
                 }
                 DebuggerMsg::FpRegisters(pid, fp_regs) => {
-                    self.process_state.iter_mut().find(|p| p.process == pid).expect("No process to set regs for").cache_fp_regs = Some(fp_regs);
+                    self.process_state
+                        .iter_mut()
+                        .find(|p| p.process == pid)
+                        .expect("No process to set regs for")
+                        .cache_fp_regs = Some(fp_regs);
                 }
             }
         }

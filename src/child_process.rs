@@ -1,6 +1,6 @@
 use crate::debugger_ui::widget::{InnerRender, UiMenu};
+use crate::{define_ui_menu, DebuggerState};
 use imgui::{TableColumnSetup, Ui, Window};
-use crate::{DebuggerState, define_ui_menu};
 
 #[derive(Default)]
 pub struct WidgetChildProcesses {
@@ -12,10 +12,7 @@ impl InnerRender for WidgetChildProcesses {
     fn render_inner(&mut self, state: &mut DebuggerState, ui: &Ui) {
         if let Some(table) = ui.begin_table_header(
             "Children",
-            [
-                TableColumnSetup::new("#"),
-                TableColumnSetup::new("ID"),
-            ],
+            [TableColumnSetup::new("#"), TableColumnSetup::new("ID")],
         ) {
             for (ii, child) in state.process_state.iter().enumerate() {
                 ui.table_next_column();

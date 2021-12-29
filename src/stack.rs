@@ -1,5 +1,5 @@
 use crate::debugger_ui::widget::{InnerRender, UiMenu};
-use crate::{DebuggerState, define_ui_menu};
+use crate::{define_ui_menu, DebuggerState};
 use imgui::{TableColumnSetup, Ui, Window};
 
 #[derive(Clone, Debug)]

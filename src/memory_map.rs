@@ -1,5 +1,5 @@
 use crate::debugger_ui::widget::{ImGuiTableBuilder, InnerRender, UiMenu};
-use crate::{DebuggerState, define_ui_menu};
+use crate::{define_ui_menu, DebuggerState};
 
 use imgui::{Ui, Window};
 
@@ -11,7 +11,7 @@ pub struct MemoryMap(pub Vec<MemoryMapEntry>);
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum MemoryMapEntryPermissionsKind {
     Private,
-    Shared
+    Shared,
 }
 impl core::fmt::Display for MemoryMapEntryPermissionsKind {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
@@ -26,7 +26,7 @@ pub struct MemoryMapEntryPermissions {
     pub read: bool,
     pub write: bool,
     pub execute: bool,
-    pub kind: MemoryMapEntryPermissionsKind
+    pub kind: MemoryMapEntryPermissionsKind,
 }
 #[derive(Clone, Debug)]
 pub struct MemoryMapEntry {
