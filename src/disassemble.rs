@@ -1,14 +1,13 @@
 use crate::debugger_ui::widget::{InnerRender, UiMenu};
-use crate::{DebuggerState, debugging_info, define_ui_menu, Msg};
+use crate::{debugging_info, define_ui_menu, DebuggerState, Msg};
 use iced_x86::{
-    Decoder, DecoderOptions, Formatter, Instruction, IntelFormatter, SymbolResolver,
-    SymbolResult,
+    Decoder, DecoderOptions, Formatter, Instruction, IntelFormatter, SymbolResolver, SymbolResult,
 };
 use imgui::{StyleColor, Ui, Window};
 
-use std::collections::HashMap;
 use crate::common_binary_file::BinaryFile;
 use crate::debugging_client::Breakpoint;
+use std::collections::HashMap;
 
 #[derive(Default, Clone)]
 struct MySymbolResolver {
@@ -145,7 +144,13 @@ impl InnerRender for WidgetDisassemble {
                                         let current_pos = ui.cursor_pos();
                                         let draw_list = ui.get_window_draw_list();
                                         const WHITE: [f32; 3] = [1.0, 1.0, 1.0];
-                                        draw_list.add_line([current_pos[0], current_pos[1]], [current_pos[0] - 100., current_pos[1] - 100.], WHITE).build();
+                                        draw_list
+                                            .add_line(
+                                                [current_pos[0], current_pos[1]],
+                                                [current_pos[0] - 100., current_pos[1] - 100.],
+                                                WHITE,
+                                            )
+                                            .build();
                                     }
                                 }
 

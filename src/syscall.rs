@@ -1,7 +1,7 @@
-use std::path::PathBuf;
 use crate::debugger_ui::widget::{InnerRender, UiMenu};
+use crate::{define_ui_menu, DebuggerState};
 use imgui::{Ui, Window};
-use crate::{DebuggerState, define_ui_menu};
+use std::path::PathBuf;
 
 /// A syscall argument
 #[derive(Debug, Clone)]
@@ -17,7 +17,7 @@ pub enum SyscallArg {
     /// A generic string
     String(String),
     /// A generic u64
-    U64(u64)
+    U64(u64),
 }
 
 /// A syscall invocation
@@ -26,7 +26,7 @@ pub struct Syscall {
     /// The name of the syscall that was executed
     pub name: String,
     /// The syscall arguments
-    pub args: Vec<SyscallArg>
+    pub args: Vec<SyscallArg>,
 }
 
 #[derive(Default)]
@@ -53,12 +53,12 @@ impl InnerRender for WidgetSyscallList {
                         } else {
                             ui.text(format!("\"{}\"", path))
                         }
-                    },
+                    }
                     SyscallArg::Address(a) => ui.text(format!("{:X}", a)),
                     SyscallArg::String(s) => ui.text(format!("\"{}\"", s)),
                 }
                 ui.same_line();
-                if index != syscall.args.len()-1 {
+                if index != syscall.args.len() - 1 {
                     ui.text(",");
                     ui.same_line();
                 }

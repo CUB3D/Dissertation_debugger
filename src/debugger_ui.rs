@@ -1,12 +1,12 @@
 use crate::breakpoints::WidgetBreakpoints;
 use crate::memory_map::WidgetMemoryMap;
 use crate::registers::WidgetRegisters;
-use crate::stack::{WidgetCallStack};
+use crate::stack::WidgetCallStack;
 use crate::{debugger_ui, DebuggerState};
 
-use imgui::{Ui};
-use imgui_filedialog::FileDialog;
 use crate::child_process::WidgetChildProcesses;
+use imgui::Ui;
+use imgui_filedialog::FileDialog;
 
 use crate::controls::WidgetControls;
 use crate::disassemble::WidgetDisassemble;

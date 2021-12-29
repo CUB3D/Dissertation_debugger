@@ -1,6 +1,6 @@
 //! Widget for displaying X86 register state
 use crate::debugger_ui::widget::{InnerRender, UiMenu};
-use crate::{DebuggerState, define_ui_menu};
+use crate::{define_ui_menu, DebuggerState};
 use imgui::{Ui, Window};
 
 /// Translated to rust from <arch/x86/include/asm/user_64.h>
@@ -103,7 +103,13 @@ impl InnerRender for WidgetRegisters {
             if let Some(fp_regs) = &state.cache_fp_regs {
                 // X87 / XMM / floating point register stack
                 for (index, st_reg) in fp_regs.st_space.chunks(4).enumerate() {
-                    ui.text(format!("ST({}): {:08X}{:08X}{:04X}", index, st_reg[0], st_reg[1], (st_reg[2] & 0xFFFF_0000) as u16));
+                    ui.text(format!(
+                        "ST({}): {:08X}{:08X}{:04X}",
+                        index,
+                        st_reg[0],
+                        st_reg[1],
+                        (st_reg[2] & 0xFFFF_0000) as u16
+                    ));
                 }
                 ui.new_line();
 
@@ -111,24 +117,41 @@ impl InnerRender for WidgetRegisters {
                 ui.text(format!("x87 Tag Word: {:X}", fp_regs.ftw));
                 for ii in 0..8 {
                     let shift = ii * 2;
-                    ui.text(format!("x87TW_{}: {}", ii, fp_regs.ftw & (0b11 << shift) >> shift));
+                    ui.text(format!(
+                        "x87TW_{}: {}",
+                        ii,
+                        fp_regs.ftw & (0b11 << shift) >> shift
+                    ));
                 }
 
                 //TODO: x87 status word + control word + mxcsr
 
                 // AVX-128 XMM registers
                 for (index, ymm_reg) in fp_regs.xmm_space.chunks(8).enumerate() {
-                    ui.text(format!("XMM{}: {:08X}{:08X}{:08X}{:08X}", index, ymm_reg[0], ymm_reg[1], ymm_reg[2], ymm_reg[3]));
+                    ui.text(format!(
+                        "XMM{}: {:08X}{:08X}{:08X}{:08X}",
+                        index, ymm_reg[0], ymm_reg[1], ymm_reg[2], ymm_reg[3]
+                    ));
                 }
                 ui.new_line();
 
                 // AVX-256 YMM registers
                 for (index, ymm_reg) in fp_regs.xmm_space.chunks(8).enumerate() {
-                    ui.text(format!("YMM{}: {:08X}{:08X}{:08X}{:08X}{:08X}{:08X}{:08X}{:08X}", index, ymm_reg[0], ymm_reg[1], ymm_reg[2], ymm_reg[3], ymm_reg[4], ymm_reg[5], ymm_reg[6], ymm_reg[7]));
+                    ui.text(format!(
+                        "YMM{}: {:08X}{:08X}{:08X}{:08X}{:08X}{:08X}{:08X}{:08X}",
+                        index,
+                        ymm_reg[0],
+                        ymm_reg[1],
+                        ymm_reg[2],
+                        ymm_reg[3],
+                        ymm_reg[4],
+                        ymm_reg[5],
+                        ymm_reg[6],
+                        ymm_reg[7]
+                    ));
                 }
                 ui.new_line();
             }
         }
     }
 }
-

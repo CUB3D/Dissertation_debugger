@@ -1,8 +1,8 @@
-use iced_x86::NumberBase::Binary;
-use crate::debugger_ui::widget::{InnerRender, UiMenu};
-use imgui::{Ui, Window};
-use crate::{DebuggerState, define_ui_menu};
 use crate::common_binary_file::BinaryFile;
+use crate::debugger_ui::widget::{InnerRender, UiMenu};
+use crate::{define_ui_menu, DebuggerState};
+use iced_x86::NumberBase::Binary;
+use imgui::{Ui, Window};
 
 #[derive(Default)]
 pub struct WidgetElfInfo {
