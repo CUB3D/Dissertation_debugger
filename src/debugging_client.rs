@@ -83,9 +83,9 @@ pub mod linux {
     use std::collections::HashMap;
     use std::error::Error;
 
-    use ptrace::{MemoryMapEntryPermissionsKind, Process, Ptrace, UserRegs};
+    use ptrace::{Process, Ptrace};
 
-    use libc::user;
+    
     use std::iter::Iterator;
 
     use crate::memory_map::{MemoryMap, MemoryMapEntry, MemoryMapEntryPermissions};
