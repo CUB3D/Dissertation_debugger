@@ -361,7 +361,7 @@ impl WaitStatus {
     }
 }
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
 pub struct Process(pub i32);
 
 impl Process {
