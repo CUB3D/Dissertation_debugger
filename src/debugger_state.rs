@@ -13,7 +13,7 @@ use crate::debugging_client::NativeDebuggingClient;
 
 use crate::memory_map::MemoryMap;
 use crate::registers::UserRegs;
-use crate::stack::CallStack;
+use crate::call_stack::CallStack;
 use crate::syscall::Syscall;
 use crate::{DebuggerMsg, DebuggingClient, Msg};
 
@@ -21,7 +21,12 @@ use crate::{DebuggerMsg, DebuggingClient, Msg};
 // have some way of saying that we don't care about some state so that the client wont bother sending it e.g memory maps
 // dont send data that hasn't changed?
 
+/// The current state of a process or thread
+/// While windows conceptually has a difference between threads and processes, linux does not so for simplicity we merge these concepts together
 pub struct ProcessState {
+    /// A reference to the process being debugged,
+    /// this *may* actually be a reference to either a process of a thread on windows
+    /// on linux this always references a process
     pub process: Process,
     /// The last known state of the process registers, boxed as this can be too large to store on the stack in some cases
     pub cache_user_regs: Option<Box<UserRegs>>,
@@ -29,6 +34,12 @@ pub struct ProcessState {
     pub cache_fp_regs: Option<Box<FpRegs>>,
     /// The entire memory space of the process, this will likely be *huge*
     pub memory: Vec<(Vec<u8>, Range<usize>)>,
+    /// The current call stack of the process, if available
+    pub call_stack: Option<CallStack>,
+    /// The current memory map of the process, if available
+    pub memory_map: Option<MemoryMap>,
+    /// The syscall history of the process
+    pub syscall_list: Vec<Syscall>,
 }
 
 impl ProcessState {
@@ -39,13 +50,15 @@ impl ProcessState {
             cache_user_regs: None,
             cache_fp_regs: None,
             memory: Vec::new(),
+            call_stack: None,
+            memory_map: None,
+            syscall_list: Vec::new(),
         }
     }
 }
 
 #[derive(Default)]
 pub struct DebuggerState {
-    pub syscall_list: Vec<Syscall>,
     pub breakpoints: Vec<Breakpoint>,
     pub process: Option<Process>,
     pub process_state: Vec<ProcessState>,
@@ -54,8 +67,6 @@ pub struct DebuggerState {
     pub single_step_mode: bool,
     pub started: bool,
     pub current_breakpoint: Option<Breakpoint>,
-    pub call_stack: Option<CallStack>,
-    pub memory_map: Option<MemoryMap>,
     //TODO: group these three together, if we have one we should have all
     pub sender: Option<Sender<Msg>>,
     pub reciever: Option<Receiver<DebuggerMsg>>,
@@ -110,14 +121,26 @@ impl DebuggerState {
                     self.process_state.push(ProcessState::with_process(p));
                     self.sender.as_ref().unwrap().send(Msg::Continue);
                 }
-                DebuggerMsg::CallStack(cs) => {
-                    self.call_stack = Some(cs);
+                DebuggerMsg::CallStack(pid, cs) => {
+                    self.process_state
+                        .iter_mut()
+                        .find(|p| p.process == pid)
+                        .expect("No process to set call stack for")
+                        .call_stack = Some(cs);
                 }
-                DebuggerMsg::Syscall(s) => {
-                    self.syscall_list.push(s);
+                DebuggerMsg::Syscall(pid, s) => {
+                    self.process_state
+                        .iter_mut()
+                        .find(|p| p.process == pid)
+                        .expect("No process to set mmap for")
+                        .syscall_list.push(s);
                 }
-                DebuggerMsg::MemoryMap(mmap) => {
-                    self.memory_map = Some(mmap);
+                DebuggerMsg::MemoryMap(pid, mmap) => {
+                    self.process_state
+                        .iter_mut()
+                        .find(|p| p.process == pid)
+                        .expect("No process to set mmap for")
+                        .memory_map = Some(mmap);
                 }
                 //TODO: maybe merge these?
                 DebuggerMsg::UserRegisters(pid, user_regs) => {

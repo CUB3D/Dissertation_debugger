@@ -33,7 +33,7 @@ pub struct Process(pub i32);
 
 use crate::memory_map::MemoryMap;
 use crate::registers::UserRegs;
-use crate::stack::CallStack;
+use crate::call_stack::CallStack;
 use crate::syscall::Syscall;
 #[cfg(target_os = "linux")]
 pub use linux::LinuxPtraceDebuggingClient as NativeDebuggingClient;
@@ -68,11 +68,11 @@ pub enum DebuggerMsg {
     /// A child process has spawned
     ChildProcessSpawn(Process),
     /// The process has stopped, we have a new call stack to display
-    CallStack(CallStack),
+    CallStack(Process, CallStack),
     /// The process has executed a syscall
-    Syscall(Syscall),
+    Syscall(Process, Syscall),
     /// The process is updating the memory map
-    MemoryMap(MemoryMap),
+    MemoryMap(Process, MemoryMap),
     /// The given process has received new user registers
     UserRegisters(Process, Box<UserRegs>),
     /// The given process has received new floating point registers
@@ -85,7 +85,7 @@ pub enum DebuggerMsg {
 pub mod linux {
     use crate::debugging_client::DebuggingClient;
     use crate::debugging_client::{DebuggerMsg, Msg};
-    use crate::stack::{CallStack, StackFrame};
+    use crate::call_stack::{CallStack, StackFrame};
     use crossbeam_channel::{unbounded, Receiver, Sender};
     use std::collections::HashMap;
     use std::error::Error;
@@ -199,6 +199,7 @@ pub mod linux {
             None
         }
 
+        /// Unwind the call stack for the given process
         fn get_call_stack(pid: Process) -> Result<CallStack, Box<dyn Error>> {
             let mut call_stack = Vec::new();
 
@@ -387,15 +388,17 @@ pub mod linux {
                             let (pid, status) = Process::wait_any();
 
                             if status.wifstopped() {
+                                // If we can get a call stack, forward that to the ui
                                 if let Ok(call_stack) =
                                     LinuxPtraceDebuggingClient::get_call_stack(pid)
                                 {
-                                    send_from_debug.send(DebuggerMsg::CallStack(call_stack));
+                                    send_from_debug.send(DebuggerMsg::CallStack(pid, call_stack));
                                 }
 
+                                // If we can get a memory map for the process
                                 if let Some(mmap) = LinuxPtraceDebuggingClient::get_memory_map(pid)
                                 {
-                                    send_from_debug.send(DebuggerMsg::MemoryMap(mmap));
+                                    send_from_debug.send(DebuggerMsg::MemoryMap(pid, mmap));
                                 }
 
                                 let user_regs = pid.ptrace_getregs();
@@ -424,7 +427,7 @@ pub mod linux {
                                             LinuxPtraceDebuggingClient::get_syscall_description(
                                                 pid, &user_regs,
                                             );
-                                        send_from_debug.send(DebuggerMsg::Syscall(syscall_desc));
+                                        send_from_debug.send(DebuggerMsg::Syscall(pid, syscall_desc));
                                         send_from_debug
                                             .send(DebuggerMsg::SyscallTrap)
                                             .expect("Failed to send from debug");

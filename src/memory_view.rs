@@ -1,4 +1,4 @@
-use crate::debugger_ui::widget::{ImGuiTableBuilder, InnerRender, UiMenu};
+use crate::debugger_ui::widget::{InnerRender, UiMenu};
 use crate::{define_ui_menu, DebuggerState};
 
 use imgui::{TableColumnSetup, Ui, Window};
@@ -25,8 +25,15 @@ impl InnerRender for WidgetMemoryView {
             for state in &state.process_state {
                 for (mem, mem_range) in &state.memory {
                     for (i, c) in mem.chunks(16).enumerate() {
+
                         ui.table_next_column();
                         ui.text(format!("{:#016X}", mem_range.start + 16 * i));
+
+                        if !ui.is_item_visible() {
+                            ui.table_next_row();
+                            continue;
+                        }
+
                         ui.table_next_column();
 
                         for c in c {

@@ -19,7 +19,7 @@ pub mod elf;
 pub mod elf_info;
 pub mod memory_map;
 pub mod registers;
-pub mod stack;
+pub mod call_stack;
 pub mod syscall;
 pub mod ui;
 pub mod memory_view;
