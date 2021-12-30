@@ -3,8 +3,9 @@ use crate::debugging_client::{Breakpoint, Process, FpRegs};
 use crossbeam_channel::{Receiver, Sender};
 
 #[cfg(target_os = "linux")]
-use ptrace::{Breakpoint, Process};
+use ptrace::{Breakpoint, Process, FpRegs};
 use std::io::Cursor;
+use std::ops::Range;
 use std::time::Duration;
 
 use crate::common_binary_file::BinaryFile;
@@ -16,12 +17,30 @@ use crate::stack::CallStack;
 use crate::syscall::Syscall;
 use crate::{DebuggerMsg, DebuggingClient, Msg};
 
+//TODO: ideas
+// have some way of saying that we don't care about some state so that the client wont bother sending it e.g memory maps
+// dont send data that hasn't changed?
+
 pub struct ProcessState {
     pub process: Process,
     /// The last known state of the process registers, boxed as this can be too large to store on the stack in some cases
     pub cache_user_regs: Option<Box<UserRegs>>,
     /// The last known state of the floating point registers, boxed as this can be too large to store on the stack in some cases
     pub cache_fp_regs: Option<Box<FpRegs>>,
+    /// The entire memory space of the process, this will likely be *huge*
+    pub memory: Vec<(Vec<u8>, Range<usize>)>,
+}
+
+impl ProcessState {
+    /// Create a new `ProcessState` for the given process id, all other fields are set to default values
+    pub fn with_process(pid: Process) -> Self {
+        Self {
+            process: pid,
+            cache_user_regs: None,
+            cache_fp_regs: None,
+            memory: Vec::new(),
+        }
+    }
 }
 
 #[derive(Default)]
@@ -47,13 +66,13 @@ impl DebuggerState {
     pub fn load_binary(&mut self, binary: &str) {
         let binary_content = std::fs::read(&binary).expect("Failed to read binary");
 
-        // if let Ok(elf) = crate::elf::parse(&mut Cursor::new(binary_content)) {
-        //     self.elf = Some(BinaryFile::Elf(elf));
-        // } else {
+        if let Ok(elf) = crate::elf::parse(&mut Cursor::new(binary_content)) {
+            self.elf = Some(BinaryFile::Elf(elf));
+        } else {
             if let Ok(pe) = exe::PEImage::from_disk_file(binary) {
                 self.elf = Some(BinaryFile::PE(pe));
             }
-        // }
+        }
 
         self.client = Some(NativeDebuggingClient::default());
         let (sender, reciever) = self.client.as_mut().unwrap().start(&binary);
@@ -85,18 +104,10 @@ impl DebuggerState {
                 }
                 DebuggerMsg::ProcessSpawn(p) => {
                     self.process = Some(p);
-                    self.process_state.push(ProcessState {
-                        process: p,
-                        cache_user_regs: None,
-                        cache_fp_regs: None,
-                    });
+                    self.process_state.push(ProcessState::with_process(p));
                 }
                 DebuggerMsg::ChildProcessSpawn(p) => {
-                    self.process_state.push(ProcessState {
-                        process: p,
-                        cache_user_regs: None,
-                        cache_fp_regs: None,
-                    });
+                    self.process_state.push(ProcessState::with_process(p));
                     self.sender.as_ref().unwrap().send(Msg::Continue);
                 }
                 DebuggerMsg::CallStack(cs) => {
@@ -122,6 +133,13 @@ impl DebuggerState {
                         .find(|p| p.process == pid)
                         .expect("No process to set regs for")
                         .cache_fp_regs = Some(fp_regs);
+                }
+                DebuggerMsg::Memory(pid, mem) => {
+                    self.process_state
+                        .iter_mut()
+                        .find(|p| p.process == pid)
+                        .expect("No process to set mem for")
+                        .memory = mem;
                 }
             }
         }

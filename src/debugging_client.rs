@@ -1,4 +1,5 @@
 //! A client for debugging a given process, handles process spawning and event handling for a given platform
+use std::ops::Range;
 use crossbeam_channel::{Receiver, Sender};
 
 pub trait DebuggingClient {
@@ -76,6 +77,8 @@ pub enum DebuggerMsg {
     UserRegisters(Process, Box<UserRegs>),
     /// The given process has received new floating point registers
     FpRegisters(Process, Box<FpRegs>),
+    /// The given process has new memory state
+    Memory(Process, Vec<(Vec<u8>, Range<usize>)>),
 }
 
 #[cfg(target_os = "linux")]
@@ -86,11 +89,13 @@ pub mod linux {
     use crossbeam_channel::{unbounded, Receiver, Sender};
     use std::collections::HashMap;
     use std::error::Error;
+    use std::io::{Read, Seek, SeekFrom};
 
     use ptrace::{Process, Ptrace};
 
     
     use std::iter::Iterator;
+    use std::ops::Range;
 
     use crate::memory_map::{MemoryMap, MemoryMapEntry, MemoryMapEntryPermissions};
     use crate::syscall::{Syscall, SyscallArg};
@@ -138,6 +143,30 @@ pub mod linux {
             regs.ss = oregs.ss;
 
             regs
+        }
+
+        fn get_memory(pid: Process) -> Vec<(Vec<u8>, Range<usize>)> {
+            let mut memory = Vec::new();
+            if let Some(mmap) = ptrace::get_memory_map(pid.0) {
+                let mut mem_file = std::fs::File::open(format!("/proc/{}/mem", pid.0)).expect("No mem?");
+                for ent in &mmap.0 {
+                    // Only backup memory that we can read
+                    if !ent.permissions.read {
+                        continue;
+                    }
+                    println!("Backing up mem section: {}", ent.path);
+                    let mut mem = vec![0u8; ent.range.end - ent.range.start];
+                    mem_file.seek(SeekFrom::Start(ent.range.start as u64)).expect("Seek failed");
+                    //TODO:
+                    let _ = mem_file.read_exact(&mut mem);//.expect("Failed to read memory range");
+
+                    memory.push((mem, ent.range.clone()));
+                }
+
+                return memory;
+            }
+
+            return vec![];
         }
 
         fn get_memory_map(pid: Process) -> Option<MemoryMap> {
@@ -211,14 +240,14 @@ pub mod linux {
                         return Syscall {
                             name: $name.to_string(),
                             args: vec![]
-                        };
+                        }
                 };
 
                 ($name: expr, $($x:ident),+) => {
                         return Syscall {
                             name: $name.to_string(),
                             args: syscall!(@arg, $($x),+ )
-                        };
+                        }
                 };
 
                 (@arg, $x: ident) => {
@@ -380,6 +409,10 @@ pub mod linux {
                                     .send(DebuggerMsg::UserRegisters(pid, user_regs_ui.clone()));
                                 send_from_debug
                                     .send(DebuggerMsg::FpRegisters(pid, fp_regs.clone()));
+
+                                let memory = LinuxPtraceDebuggingClient::get_memory(pid);
+                                send_from_debug
+                                    .send(DebuggerMsg::Memory(pid, memory));
 
                                 // Handle the various trap types
                                 let stopsig = status.wstopsig();

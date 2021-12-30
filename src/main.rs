@@ -22,6 +22,7 @@ pub mod registers;
 pub mod stack;
 pub mod syscall;
 pub mod ui;
+pub mod memory_view;
 
 fn main() {
     let matches = App::new("debugger")

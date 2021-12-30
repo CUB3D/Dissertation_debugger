@@ -11,11 +11,13 @@ use imgui_filedialog::FileDialog;
 use crate::controls::WidgetControls;
 use crate::disassemble::WidgetDisassemble;
 use crate::elf_info::WidgetElfInfo;
+use crate::memory_view::WidgetMemoryView;
 use crate::syscall::WidgetSyscallList;
 
 pub struct DebuggerUi {
     fd: FileDialog,
     mmap: WidgetMemoryMap,
+    mem: WidgetMemoryView,
     syscalls: WidgetSyscallList,
     registers: WidgetRegisters,
     elf_info: WidgetElfInfo,
@@ -31,6 +33,7 @@ impl Default for DebuggerUi {
         Self {
             fd: imgui_filedialog::FileDialog::create("Test"),
             mmap: Default::default(),
+            mem: Default::default(),
             syscalls: Default::default(),
             registers: Default::default(),
             elf_info: Default::default(),
@@ -47,6 +50,7 @@ impl DebuggerUi {
     pub fn render(&mut self, ui: &Ui, state: &mut DebuggerState) {
         let mut menus = [
             self.mmap.as_uimenu(),
+            self.mem.as_uimenu(),
             self.syscalls.as_uimenu(),
             self.registers.as_uimenu(),
             self.elf_info.as_uimenu(),
