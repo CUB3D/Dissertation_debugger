@@ -123,7 +123,8 @@ impl InnerRender for WidgetRegisters {
                         0b00 => "valid",
                         0b01 => "zero",
                         0b10 => "special",
-                        0b11 => "Empty"
+                        0b11 => "Empty",
+                        _ => "Unknown"
                     };
 
                     ui.text(format!(
