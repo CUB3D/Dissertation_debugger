@@ -1,7 +1,7 @@
 use crate::breakpoints::WidgetBreakpoints;
 use crate::memory_map::WidgetMemoryMap;
 use crate::registers::WidgetRegisters;
-use crate::stack::WidgetCallStack;
+use crate::call_stack::WidgetCallStack;
 use crate::{debugger_ui, DebuggerState};
 
 use crate::child_process::WidgetChildProcesses;
@@ -129,62 +129,6 @@ pub mod widget {
 
     pub trait InnerRender {
         fn render_inner(&mut self, state: &mut DebuggerState, ui: &Ui);
-    }
-
-    use imgui::sys::cty::c_int;
-    use imgui::sys::{
-        igBeginTable, igEndTable, igTableHeadersRow, igTableNextColumn, igTableNextRow,
-        igTableSetupColumn, ImGuiTableFlags, ImVec2,
-    };
-    use std::ffi::CString;
-
-    pub struct ImGuiTableBuilder;
-
-    impl ImGuiTableBuilder {
-        pub fn with_name<S: Fn(&mut Self), T: Fn(&mut Self)>(
-            name: CString,
-            column_count: c_int,
-            setup_func: S,
-            build_func: T,
-        ) {
-            if unsafe {
-                igBeginTable(
-                    name.as_ptr(),
-                    column_count,
-                    ImGuiTableFlags::default(),
-                    ImVec2::zero(),
-                    0.0f32,
-                )
-            } {
-                let mut s = Self {};
-                setup_func(&mut s);
-                unsafe {
-                    igTableHeadersRow();
-                }
-                build_func(&mut s);
-            }
-            unsafe {
-                igEndTable();
-            }
-        }
-
-        pub fn next_column(&mut self) {
-            unsafe {
-                igTableNextColumn();
-            }
-        }
-
-        pub fn next_row(&mut self) {
-            unsafe {
-                igTableNextRow(0, 0f32);
-            }
-        }
-
-        pub fn setup_column(&mut self, label: CString) {
-            unsafe {
-                igTableSetupColumn(label.as_ptr(), 0, 0f32, 0);
-            }
-        }
     }
 }
 

@@ -18,15 +18,15 @@ define_ui_menu!(WidgetCallStack, "Call Stack");
 
 impl InnerRender for WidgetCallStack {
     fn render_inner(&mut self, state: &mut DebuggerState, ui: &Ui) {
-        if let Some(_) = state.process {
-            if let Some(call_stack) = &state.call_stack {
-                if let Some(table) = ui.begin_table_header(
-                    "Breakpoints",
-                    [
-                        TableColumnSetup::new("Address"),
-                        TableColumnSetup::new("Description"),
-                    ],
-                ) {
+        if let Some(table) = ui.begin_table_header(
+            "CallStack",
+            [
+                TableColumnSetup::new("Address"),
+                TableColumnSetup::new("Description"),
+            ],
+        ) {
+            for state in &state.process_state {
+                if let Some(call_stack) = &state.call_stack {
                     for frame in &call_stack.0 {
                         ui.table_next_column();
                         ui.text(format!("{:#016X}", frame.addr));
@@ -34,11 +34,13 @@ impl InnerRender for WidgetCallStack {
                         ui.text(&frame.description);
                         ui.table_next_row();
                     }
-                    table.end();
+                } else {
+                    ui.text("No call stack!");
                 }
             }
-        } else {
-            ui.text("No process!");
+            table.end();
         }
+
+
     }
 }
