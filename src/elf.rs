@@ -57,7 +57,7 @@ pub fn parse<T: Read + Seek>(from: &mut T) -> Result<Elf, Box<dyn Error>> {
     let _second_header_entry_count = from.read_u16()?;
     let section_names_index = from.read_u16()?;
 
-    debug_assert!(_bit == 2, "64 bit only in 2021 please");
+    //debug_assert!(_bit == 2, "64 bit only in 2021 please");
     // debug_assert_eq!(_isa, 0xF3, "RISCv only please");
 
     from.seek(SeekFrom::Start(_section_header_pos))?;
