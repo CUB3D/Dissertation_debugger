@@ -117,10 +117,20 @@ impl InnerRender for WidgetRegisters {
                 ui.text(format!("x87 Tag Word: {:X}", fp_regs.ftw));
                 for ii in 0..8 {
                     let shift = ii * 2;
+                    let v = fp_regs.ftw & (0b11 << shift) >> shift;
+
+                    let desc = match v {
+                        0b00 => "valid",
+                        0b01 => "zero",
+                        0b10 => "special",
+                        0b11 => "Empty"
+                    };
+
                     ui.text(format!(
-                        "x87TW_{}: {}",
+                        "x87TW_{}: {} ({})",
                         ii,
-                        fp_regs.ftw & (0b11 << shift) >> shift
+                        v,
+                        desc
                     ));
                 }
 
