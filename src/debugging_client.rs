@@ -239,6 +239,7 @@ pub mod linux {
             Ok(CallStack(call_stack))
         }
 
+        /// Convert the register state from a syscall trap into a syscall event for the ui
         fn get_syscall_description(pid: Process, user_regs: &Box<ptrace::UserRegs>) -> Syscall {
             macro_rules! syscall {
                 ($name: expr) => {
@@ -348,15 +349,10 @@ pub mod linux {
                         ],
                     };
                 }
-                _ => {}
+                _ => {
+                    panic!("Unknown syscall {}",  user_regs.orig_ax);
+                }
             }
-
-            let name = match user_regs.orig_ax as libc::c_long {
-                libc::SYS_pread64 => format!("SYS_pread64(?)"),
-                _ => format!("Unknown({})", user_regs.orig_ax),
-            };
-
-            return Syscall { name, args: vec![] };
         }
 
         // Run the ptrace event loop
