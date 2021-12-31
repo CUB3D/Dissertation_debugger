@@ -67,6 +67,7 @@ pub struct DebuggerState {
     pub single_step_mode: bool,
     pub started: bool,
     pub current_breakpoint: Option<Breakpoint>,
+    pub halt_reason: String,
     //TODO: group these three together, if we have one we should have all
     pub sender: Option<Sender<Msg>>,
     pub reciever: Option<Receiver<DebuggerMsg>>,
@@ -100,25 +101,35 @@ impl DebuggerState {
         {
             match msg {
                 DebuggerMsg::Trap => {
+                    self.halt_reason = "Trap".to_string();
+
                     if self.auto_stp {
                         self.sender.as_ref().unwrap().send(Msg::Continue);
                     }
                 }
                 DebuggerMsg::SyscallTrap => {
+                    self.halt_reason = "Syscall Trap".to_string();
+
+
                     if self.auto_stp {
                         self.sender.as_ref().unwrap().send(Msg::Continue);
                     }
                 }
                 DebuggerMsg::BPTrap { breakpoint } => {
+                    self.halt_reason = format!("Breakpoint hit @ {:X}", breakpoint.address);
+
                     // int3 never auto continues
                     self.current_breakpoint = Some(breakpoint);
                 }
                 DebuggerMsg::ProcessSpawn(p) => {
                     self.process = Some(p);
                     self.process_state.push(ProcessState::with_process(p));
+                    self.halt_reason = "Process Started".to_string();
                 }
                 DebuggerMsg::ChildProcessSpawn(p) => {
                     self.process_state.push(ProcessState::with_process(p));
+                    // TODO: hack here, we send this 2 times, onece for the new child, once for the parent
+                    self.sender.as_ref().unwrap().send(Msg::Continue);
                     self.sender.as_ref().unwrap().send(Msg::Continue);
                 }
                 DebuggerMsg::CallStack(pid, cs) => {
@@ -187,6 +198,8 @@ impl DebuggerState {
             }
             Msg::InstallBreakpoint { .. } => {}
             Msg::DoSingleStep => {}
+            Msg::Restart => {}
+            Msg::Stop => {}
         }
     }
 

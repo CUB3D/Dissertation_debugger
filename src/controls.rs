@@ -12,52 +12,88 @@ impl Default for WidgetControls {
     }
 }
 
+impl WidgetControls {
+    fn send_continue(&self, state: &mut DebuggerState) {
+        if let Some(bp) = &state.current_breakpoint {
+            state
+                .sender
+                .as_ref()
+                .unwrap()
+                .send(Msg::DoSingleStep)
+                .expect("Failed to send msg");
+            state
+                .sender
+                .as_ref()
+                .unwrap()
+                .send(Msg::InstallBreakpoint {
+                    address: bp.address,
+                })
+                .expect("Failed to send msg");
+            state.current_breakpoint = None;
+        }
+        state
+            .sender
+            .as_ref()
+            .unwrap()
+            .send(Msg::Continue)
+            .expect("Failed to send msg");
+        state.halt_reason = "".to_string();
+    }
+}
+
 impl InnerRender for WidgetControls {
     fn render_inner(&mut self, state: &mut DebuggerState, ui: &Ui) {
-        let mut send_continue = || {
-            if let Some(bp) = &state.current_breakpoint {
-                state
-                    .sender
-                    .as_ref()
-                    .unwrap()
-                    .send(Msg::DoSingleStep)
-                    .expect("Failed to send msg");
-                state
-                    .sender
-                    .as_ref()
-                    .unwrap()
-                    .send(Msg::InstallBreakpoint {
-                        address: bp.address,
-                    })
-                    .expect("Failed to send msg");
-                state.current_breakpoint = None;
-            }
-            state
-                .sender
-                .as_ref()
-                .unwrap()
-                .send(Msg::Continue)
-                .expect("Failed to send msg");
-        };
 
-        if ui.small_button("|>") {
-            state
-                .sender
-                .as_ref()
-                .unwrap()
-                .send(Msg::Start)
-                .expect("Failed to send msg");
-            state.started = true;
+        // Show start button only if a file is loaded
+        if state.elf.is_some() {
+            if state.process.is_some() {
+                // Restart button, only shown when a process is currently running
+                if ui.small_button("Restart") {
+                    state
+                        .sender
+                        .as_ref()
+                        .unwrap()
+                        .send(Msg::Restart)
+                        .expect("Failed to send msg");
+                }
+            } else {
+                // Start button, only shown when no process is currently running
+                if ui.small_button("|>") {
+                    state
+                        .sender
+                        .as_ref()
+                        .unwrap()
+                        .send(Msg::Start)
+                        .expect("Failed to send msg");
+                    state.started = true;
+                }
+            }
         }
+
+        if state.process.is_some() {
+            // Stop button, only shown when a process is currently running
+            if ui.small_button("Stop") {
+                state
+                    .sender
+                    .as_ref()
+                    .unwrap()
+                    .send(Msg::Stop)
+                    .expect("Failed to send msg");
+                state.started = false;
+            }
+        }
+
+        ui.text(format!("Halt reason: {}", &state.halt_reason));
+
         if state.started {
             if ui.checkbox("Auto step", &mut state.auto_stp) {
                 if state.auto_stp {
-                    send_continue();
+                    self.send_continue(state);
                 }
             }
             if !state.auto_stp {
                 if ui.small_button("Step") {
-                    send_continue();
+                    self.send_continue(state);
                 }
             }
 
