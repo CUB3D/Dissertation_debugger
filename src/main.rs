@@ -24,6 +24,11 @@ pub mod syscall;
 pub mod ui;
 pub mod memory_view;
 
+///disassemble should have lines for branches
+// should be able to pause in place (maybe we can send a sigstop?)
+// save snapshots?
+// have a log so that prints are visible in the gui
+
 fn main() {
     let matches = App::new("debugger")
         .version("v0.1")
