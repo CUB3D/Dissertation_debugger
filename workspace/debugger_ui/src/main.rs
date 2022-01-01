@@ -1,3 +1,5 @@
+//! Implements the ui for the debugger
+
 #![feature(seek_stream_len)]
 #![feature(new_uninit)]
 
