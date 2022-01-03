@@ -1,5 +1,7 @@
 #[cfg(target_os = "windows")]
 use crate::debugging_client::{Breakpoint, Process, FpRegs};
+#[cfg(target_os = "macos")]
+use crate::debugging_client::{Breakpoint, Process, FpRegs};
 use crossbeam_channel::{Receiver, Sender};
 
 #[cfg(target_os = "linux")]

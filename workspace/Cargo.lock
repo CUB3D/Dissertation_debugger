@@ -479,7 +479,6 @@ dependencies = [
  "imgui-glium-renderer",
  "imgui-winit-support",
  "libc",
- "ptrace",
  "unwind",
  "windows",
 ]
@@ -1381,13 +1380,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c7342d5883fbccae1cc37a2353b09c87c9b0f3afd73f5fb9bba687a1f733b029"
 dependencies = [
  "unicode-xid",
-]
-
-[[package]]
-name = "ptrace"
-version = "0.1.0"
-dependencies = [
- "libc",
 ]
 
 [[package]]

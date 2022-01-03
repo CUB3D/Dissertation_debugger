@@ -9,25 +9,25 @@ pub trait DebuggingClient {
 #[cfg(target_os = "linux")]
 pub use ptrace::{Breakpoint, FpRegs, Process};
 
-#[cfg(target_os = "windows")]
+#[cfg(not(target_os = "linux"))]
 #[derive(Copy, Clone, Debug)]
 pub struct Breakpoint {
     pub address: usize,
 }
-#[cfg(target_os = "windows")]
+#[cfg(not(target_os = "linux"))]
 impl Breakpoint {
     pub fn new(address: usize) -> Self {
         Self { address }
     }
 }
-#[cfg(target_os = "windows")]
+#[cfg(not(target_os = "linux"))]
 #[derive(Clone, Debug)]
 pub struct FpRegs {
     pub ftw: libc::c_ushort,
     pub st_space: [libc::c_uint; 32],
     pub xmm_space: [libc::c_uint; 64],
 }
-#[cfg(target_os = "windows")]
+#[cfg(not(target_os = "linux"))]
 #[derive(Copy, Clone, Debug, PartialEq, Hash)]
 pub struct Process(pub i32);
 
@@ -39,6 +39,8 @@ use crate::syscall::Syscall;
 pub use linux::LinuxPtraceDebuggingClient as NativeDebuggingClient;
 #[cfg(target_os = "windows")]
 pub use win::WindowsNTDebuggingClient as NativeDebuggingClient;
+#[cfg(target_os = "macos")]
+pub use mac::DarwinDebuggingClient as NativeDebuggingClient;
 
 #[derive(Clone)]
 pub enum Msg {
@@ -1075,6 +1077,43 @@ pub mod win {
                 }
                 drop(binary_path);
             });
+
+            return (sender, rec_from_debug);
+        }
+    }
+}
+
+#[cfg(target_os = "macos")]
+pub mod mac {
+    use crate::debugging_client::{DebuggingClient, FpRegs, Process};
+    use crate::memory_map::{
+        MemoryMap, MemoryMapEntry, MemoryMapEntryPermissions, MemoryMapEntryPermissionsKind,
+    };
+    use crate::registers::UserRegs;
+    use crate::{DebuggerMsg, DebuggerState, Msg};
+    use core::default::Default;
+    use crossbeam_channel::{unbounded, Receiver, Sender};
+    use std::ffi::CString;
+
+    #[derive(Default)]
+    pub struct DarwinDebuggingClient {}
+
+    impl DarwinDebuggingClient {
+        pub fn spawn_process(&self, name: &str) {
+            let mut attr = unsafe { Box::<libc::posix_spawnattr_t>::new_zeroed().assume_init() };
+            unsafe {
+            let status = libc::posix_spawnattr_init(attr.as_mut());
+            assert_eq!(status, 0, "Unable to init spawnattr");
+            }
+        }
+    }
+
+    impl DebuggingClient for DarwinDebuggingClient {
+        fn start(&mut self, binary_path: &str) -> (Sender<Msg>, Receiver<DebuggerMsg>) {
+            let (send_from_debug, rec_from_debug) = unbounded();
+            let (sender, reciever) = unbounded();
+
+            self.spawn_process(&binary_path);
 
             return (sender, rec_from_debug);
         }
