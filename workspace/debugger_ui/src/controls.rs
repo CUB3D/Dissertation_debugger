@@ -45,7 +45,7 @@ impl InnerRender for WidgetControls {
     fn render_inner(&mut self, state: &mut DebuggerState, ui: &Ui) {
 
         // Show start button only if a file is loaded
-        if state.elf.is_some() {
+        if state.elf.is_some() || true {
             if state.process.is_some() {
                 // Restart button, only shown when a process is currently running
                 if ui.small_button("Restart") {
