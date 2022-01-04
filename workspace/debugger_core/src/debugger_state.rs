@@ -1,7 +1,7 @@
 #[cfg(target_os = "windows")]
-use crate::debugging_client::{Breakpoint, Process, FpRegs};
+use crate::{Breakpoint, Process, FpRegs};
 #[cfg(target_os = "macos")]
-use crate::debugging_client::{Breakpoint, Process, FpRegs};
+use create::{Breakpoint, Process, FpRegs};
 use crossbeam_channel::{Receiver, Sender};
 
 #[cfg(target_os = "linux")]
@@ -11,13 +11,12 @@ use std::ops::Range;
 use std::time::Duration;
 
 use crate::common_binary_file::BinaryFile;
-use crate::debugging_client::NativeDebuggingClient;
+use crate::{DebuggerMsg, DebuggingClient, Msg, NativeDebuggingClient};
 
-use crate::memory_map::MemoryMap;
-use crate::registers::UserRegs;
-use crate::call_stack::CallStack;
-use crate::syscall::Syscall;
-use crate::{DebuggerMsg, DebuggingClient, Msg};
+use crate::MemoryMap;
+use crate::UserRegs;
+use crate::CallStack;
+use crate::Syscall;
 
 //TODO: ideas
 // have some way of saying that we don't care about some state so that the client wont bother sending it e.g memory maps

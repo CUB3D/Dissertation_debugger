@@ -1,13 +1,14 @@
 use crate::debugger_ui::widget::{InnerRender, UiMenu};
-use crate::{debugging_info, define_ui_menu, DebuggerState, Msg};
+use crate::{debugging_info, define_ui_menu, DebuggerState};
 use iced_x86::{
     Decoder, DecoderOptions, Formatter, Instruction, IntelFormatter, SymbolResolver, SymbolResult,
 };
 use imgui::{StyleColor, Ui, Window};
 
-use crate::common_binary_file::BinaryFile;
-use crate::debugging_client::Breakpoint;
+use debugger_core::common_binary_file::BinaryFile;
 use std::collections::HashMap;
+use debugger_core::Breakpoint;
+use debugger_core::Msg;
 
 #[derive(Default, Clone)]
 struct MySymbolResolver {

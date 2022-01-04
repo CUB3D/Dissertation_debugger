@@ -2,14 +2,6 @@ use crate::debugger_ui::widget::{InnerRender, UiMenu};
 use crate::{define_ui_menu, DebuggerState};
 use imgui::{TableColumnSetup, Ui, Window};
 
-#[derive(Clone, Debug)]
-pub struct CallStack(pub Vec<StackFrame>);
-#[derive(Clone, Debug)]
-pub struct StackFrame {
-    pub addr: usize,
-    pub description: String,
-}
-
 #[derive(Default)]
 pub struct WidgetCallStack {
     pub visible: bool,
