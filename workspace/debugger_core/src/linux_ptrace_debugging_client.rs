@@ -71,7 +71,7 @@ impl LinuxPtraceDebuggingClient {
                 if !ent.permissions.read {
                     continue;
                 }
-                println!("Backing up mem section: {}", ent.path);
+                // println!("Backing up mem section: {}", ent.path);
                 let mut mem = vec![0u8; ent.range.end - ent.range.start];
                 mem_file.seek(SeekFrom::Start(ent.range.start as u64)).expect("Seek failed");
                 //TODO:
@@ -270,190 +270,19 @@ impl LinuxPtraceDebuggingClient {
 
     // Run the ptrace event loop
     // Waits for signals from the process and responds appropriately
-    // fn ptrace_event_loop() {
-    //     loop {
-    //         let (pid, status) = Process::wait_any();
-    //
-    //         if status.wifstopped() {
-    //             // If we can get a call stack, forward that to the ui
-    //             if let Ok(call_stack) =
-    //             LinuxPtraceDebuggingClient::get_call_stack(pid)
-    //             {
-    //                 send_from_debug.send(DebuggerMsg::CallStack(pid, call_stack));
-    //             }
-    //
-    //             // If we can get a memory map for the process
-    //             if let Some(mmap) = LinuxPtraceDebuggingClient::get_memory_map(pid)
-    //             {
-    //                 send_from_debug.send(DebuggerMsg::MemoryMap(pid, mmap));
-    //             }
-    //
-    //             let user_regs = pid.ptrace_getregs();
-    //             let fp_regs = pid.ptrace_getfpregs();
-    //
-    //             let user_regs_ui =
-    //                 LinuxPtraceDebuggingClient::convert_ptrace_registers(
-    //                     &user_regs,
-    //                 );
-    //             send_from_debug
-    //                 .send(DebuggerMsg::UserRegisters(pid, user_regs_ui.clone()));
-    //             send_from_debug
-    //                 .send(DebuggerMsg::FpRegisters(pid, fp_regs.clone()));
-    //
-    //             // Read the process memory
-    //             let memory = LinuxPtraceDebuggingClient::get_memory(pid);
-    //             send_from_debug
-    //                 .send(DebuggerMsg::Memory(pid, memory));
-    //
-    //             // Handle the various trap types
-    //             let stopsig = status.wstopsig();
-    //             if stopsig == (libc::SIGTRAP | 0x80) {
-    //                 //TODO: do we need to track this for each process?
-    //                 if !in_syscall.get(&pid).unwrap_or(&false) {
-    //                     // Figure out the details of the syscall
-    //                     let syscall_desc =
-    //                         LinuxPtraceDebuggingClient::get_syscall_description(
-    //                             pid, &user_regs,
-    //                         );
-    //                     send_from_debug.send(DebuggerMsg::Syscall(pid, syscall_desc));
-    //                     send_from_debug
-    //                         .send(DebuggerMsg::SyscallTrap)
-    //                         .expect("Failed to send from debug");
-    //                     in_syscall.insert(pid, true);
-    //                 } else {
-    //                     pid.ptrace_syscall();
-    //                     in_syscall.insert(pid, false);
-    //                     continue;
-    //                 }
-    //                 // println!("syscall");
-    //             } else if stopsig == libc::SIGTRAP {
-    //                 // println!("sigtrap");
-    //                 let event = status.0 >> 16;
-    //
-    //
-    //                 if event == 0 {
-    //                     // We know we didnt hit a syscall but we might have hit a manual breakpoint, check if we hit a 0xcc
-    //                     if pid.ptrace_peektext(user_regs.ip as usize - 1) & 0xFF == 0xCC
-    //                     {
-    //                         println!(
-    //                             "Hit a breakpoint @ 0x{:x} ::: {:X}",
-    //                             regs.ip,
-    //                             pid.ptrace_peektext(user_regs.ip as usize - 1)
-    //                         );
-    //                         let bp = local_debugger_state.breakpoints.iter_mut().find(|bp| bp.address == regs.ip as usize - 1).expect("Hit a breakpoint, but we can't find it to uninstall");
-    //                         bp.uninstall(pid);
-    //                         // Go back to the start of the original instruction so it actually gets executed
-    //                         unsafe {
-    //                             libc::ptrace(
-    //                                 libc::PTRACE_POKEUSER,
-    //                                 pid,
-    //                                 8 * libc::RIP,
-    //                                 regs.ip - 1,
-    //                             )
-    //                         };
-    //                         user_regs.ip -= 1;
-    //                         //TODO: we need to re-send the registers here
-    //
-    //                         send_from_debug
-    //                             .send(DebuggerMsg::BPTrap { breakpoint: *bp })
-    //                             .expect("Faeild to send from debug");
-    //                     } else {
-    //                         send_from_debug
-    //                             .send(DebuggerMsg::Trap)
-    //                             .expect("Faeild to send from debug");
-    //                     }
-    //                 } else {
-    //                     match event {
-    //                         libc::PTRACE_EVENT_FORK => {
-    //                             let pid = pid.ptrace_geteventmsg();
-    //                             unsafe {
-    //                                 libc::ptrace(
-    //                                     libc::PTRACE_SETOPTIONS,
-    //                                     pid,
-    //                                     0,
-    //                                     libc::PTRACE_O_TRACEVFORK
-    //                                         | libc::PTRACE_O_EXITKILL
-    //                                         | libc::PTRACE_O_TRACECLONE
-    //                                         | libc::PTRACE_O_TRACEEXEC
-    //                                         | libc::PTRACE_O_TRACEEXIT
-    //                                         | libc::PTRACE_O_TRACEFORK
-    //                                         | libc::PTRACE_O_TRACESYSGOOD,
-    //                                 )
-    //                             };
-    //                             // self.processes.insert(pid as i32, ());
-    //                             println!("Child forked {}", pid);
-    //                             Process(pid as i32).ptrace_syscall();
-    //                         }
-    //                         libc::PTRACE_EVENT_VFORK => {
-    //                             let pid = pid.ptrace_geteventmsg();
-    //                             unsafe {
-    //                                 libc::ptrace(
-    //                                     libc::PTRACE_SETOPTIONS,
-    //                                     pid,
-    //                                     0,
-    //                                     libc::PTRACE_O_TRACEVFORK
-    //                                         | libc::PTRACE_O_EXITKILL
-    //                                         | libc::PTRACE_O_TRACECLONE
-    //                                         | libc::PTRACE_O_TRACEEXEC
-    //                                         | libc::PTRACE_O_TRACEEXIT
-    //                                         | libc::PTRACE_O_TRACEFORK
-    //                                         | libc::PTRACE_O_TRACESYSGOOD,
-    //                                 )
-    //                             };
-    //                             // self.processes.insert(pid as i32, ());
-    //                             println!("Child vforked {}", pid);
-    //                             Process(pid as i32).ptrace_syscall();
-    //                         }
-    //                         libc::PTRACE_EVENT_CLONE => {
-    //                             let pid = pid.ptrace_geteventmsg();
-    //                             unsafe {
-    //                                 libc::ptrace(
-    //                                     libc::PTRACE_SETOPTIONS,
-    //                                     pid,
-    //                                     0,
-    //                                     libc::PTRACE_O_TRACEVFORK
-    //                                         | libc::PTRACE_O_EXITKILL
-    //                                         | libc::PTRACE_O_TRACECLONE
-    //                                         | libc::PTRACE_O_TRACEEXEC
-    //                                         | libc::PTRACE_O_TRACEEXIT
-    //                                         | libc::PTRACE_O_TRACEFORK
-    //                                         | libc::PTRACE_O_TRACESYSGOOD,
-    //                                 )
-    //                             };
-    //                             send_from_debug.send(
-    //                                 DebuggerMsg::ChildProcessSpawn(Process(
-    //                                     pid as i32,
-    //                                 )),
-    //                             );
-    //                             println!("Child cloned {}", pid);
-    //                         }
-    //                         libc::PTRACE_EVENT_EXIT => {
-    //                             let exit_status = pid.ptrace_geteventmsg();
-    //                             println!(
-    //                                 "child {:?} exit with status {}",
-    //                                 pid, exit_status
-    //                             );
-    //                             // self.processes.remove(&pid.0);
-    //                             // std::process::exit(0);
-    //                         }
-    //                         _ => panic!("Unknown ptrace event: {}", event),
-    //                     }
-    //                 }
-    //             }
-    //         }
-    //     }
-    // }
 }
 
 impl DebuggingClient for LinuxPtraceDebuggingClient {
-    fn start(&mut self, binary_path: &str) -> (Sender<Msg>, Receiver<DebuggerMsg>) {
+    fn start(&mut self, binary_path: &str, args: &[&str]) -> (Sender<Msg>, Receiver<DebuggerMsg>) {
         let (send_from_debug, rec_from_debug) = unbounded();
         let (sender, reciever) = unbounded();
 
         // Can't send a ref to a thread
         let binary_path = binary_path.to_string();
+        let args = args.iter().map(|s| s.to_string()).collect::<Vec<_>>();
         std::thread::spawn(move || {
-            let debugger = Ptrace::new(&binary_path, "Debuggee", "")
+            let farg = args.first().map(|s| s.clone()).unwrap_or("".to_string());
+            let debugger = Ptrace::new(&binary_path, "Debuggee", &farg)
                 .expect("Failed to start process under ptrace");
 
             let msg = reciever.recv().expect("failed to get msg");
@@ -474,7 +303,7 @@ impl DebuggingClient for LinuxPtraceDebuggingClient {
 
                     drop(child);
 
-                    loop {
+                    'big_exit: loop {
                         let (pid, status) = Process::wait_any();
 
                         if status.wifstopped() {
@@ -537,11 +366,11 @@ impl DebuggingClient for LinuxPtraceDebuggingClient {
                                     // We know we didnt hit a syscall but we might have hit a manual breakpoint, check if we hit a 0xcc
                                     if pid.ptrace_peektext(user_regs.ip as usize - 1) & 0xFF == 0xCC
                                     {
-                                        println!(
-                                            "Hit a breakpoint @ 0x{:x} ::: {:X}",
-                                            user_regs.ip,
-                                            pid.ptrace_peektext(user_regs.ip as usize - 1)
-                                        );
+                                        // println!(
+                                        //     "Hit a breakpoint @ 0x{:x} ::: {:X}",
+                                        //     user_regs.ip,
+                                        //     pid.ptrace_peektext(user_regs.ip as usize - 1)
+                                        // );
                                         let bp = local_debugger_state.breakpoints.iter_mut().find(|bp| bp.address == user_regs.ip as usize - 1).expect("Hit a breakpoint, but we can't find it to uninstall");
                                         bp.uninstall(pid);
                                         // Go back to the start of the original instruction so it actually gets executed
@@ -637,9 +466,13 @@ impl DebuggingClient for LinuxPtraceDebuggingClient {
                                         libc::PTRACE_EVENT_EXIT => {
                                             let exit_status = pid.ptrace_geteventmsg();
                                             println!(
-                                                "child {:?} exit with status {}",
+                                                "child {:?} exit with status {}, assuming finished",
                                                 pid, exit_status
                                             );
+                                            send_from_debug.send(
+                                                DebuggerMsg::ProcessDeath(pid, exit_status),
+                                            );
+                                            break 'big_exit;
                                             // self.processes.remove(&pid.0);
                                             // std::process::exit(0);
                                         }
@@ -659,7 +492,7 @@ impl DebuggingClient for LinuxPtraceDebuggingClient {
                                     let bp =
                                         local_debugger_state.breakpoints.last_mut().unwrap();
                                     let success = bp.install(child);
-                                    println!("Installed bp at {:?}, success: {}", bp, success);
+                                    // println!("Installed bp at {:?}, success: {}", bp, success);
                                 }
                                 Msg::DoSingleStep => {
                                     pid.ptrace_singlestep();

@@ -14,7 +14,7 @@ use crossbeam_channel::{Receiver, Sender};
 
 pub trait DebuggingClient {
     //TODO: should this return an instance of the client
-    fn start(&mut self, binary_path: &str) -> (Sender<Msg>, Receiver<DebuggerMsg>);
+    fn start(&mut self, binary_path: &str, args: &[&str]) -> (Sender<Msg>, Receiver<DebuggerMsg>);
 }
 #[cfg(target_os = "linux")]
 pub use ptrace::{Breakpoint, FpRegs, Process};
@@ -55,9 +55,13 @@ pub use mac::DarwinDebuggingClient as NativeDebuggingClient;
 /// Messages send from the ui to the debugging client
 #[derive(Clone)]
 pub enum Msg {
+    /// Start running an instance of the binary
     Start,
+    /// Resume executing the binary
     Continue,
+    /// Set wether to single step (true) or syscall step (false)
     SingleStep(bool),
+    /// Register and install a breakpoint
     AddBreakpoint(Breakpoint),
     /// Remove the breakpoint at the given address
     RemoveBreakpoint(usize),
@@ -77,12 +81,18 @@ pub enum Msg {
 pub enum DebuggerMsg {
     /// The child has hit a singlestep breakpoint, control returned to caller
     Trap,
-    /// The child has hit a int3 breakpoint, control returned to caller
+    /// The child has hit a int3 breakpoint, control returned to caller at the start of the
+    /// original instruction that was overwriten with the bp
+    /// At this point the breakpoint is no longer active, it can be reinstalled with
+    /// InstallBreakpoint, however this must be done after executing past this point
+    /// or it will be hit in a loop.
     BPTrap { breakpoint: Breakpoint },
     /// The child has hit a syscall breakpoint, control returned to caller
     SyscallTrap,
     /// The process has spawned
     ProcessSpawn(Process),
+    /// The given process has died with the given status
+    ProcessDeath(Process, usize),
     /// A child process has spawned
     ChildProcessSpawn(Process),
     /// The process has stopped, we have a new call stack to display
