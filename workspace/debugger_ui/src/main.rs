@@ -3,21 +3,17 @@
 #![feature(seek_stream_len)]
 #![feature(new_uninit)]
 
-use crate::debugger_state::DebuggerState;
+use debugger_core::debugger_state::DebuggerState;
 use crate::debugger_ui::DebuggerUi;
 use clap::{App, Arg};
-use debugging_client::{DebuggerMsg, DebuggingClient, Msg};
 
 pub mod breakpoints;
 pub mod child_process;
-pub mod common_binary_file;
 pub mod controls;
-pub mod debugger_state;
 pub mod debugger_ui;
 pub mod debugging_client;
 pub mod debugging_info;
 pub mod disassemble;
-pub mod elf;
 pub mod elf_info;
 pub mod memory_map;
 pub mod registers;
@@ -30,6 +26,9 @@ pub mod memory_view;
 // should be able to pause in place (maybe we can send a sigstop?)
 // save snapshots?
 // have a log so that prints are visible in the gui
+
+// Needed for other things:
+// breakpoints api that works
 
 fn main() {
     let matches = App::new("debugger")

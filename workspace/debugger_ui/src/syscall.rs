@@ -1,33 +1,7 @@
 use crate::debugger_ui::widget::{InnerRender, UiMenu};
 use crate::{define_ui_menu, DebuggerState};
 use imgui::{Ui, Window};
-
-
-/// A syscall argument
-#[derive(Debug, Clone)]
-pub enum SyscallArg {
-    /// A path to a file
-    FilePath(String),
-    /// A reference to an open file descriptor
-    FileDescriptor(i64),
-    /// A process id
-    ProcessId(u64),
-    /// A memory address
-    Address(u64),
-    /// A generic string
-    String(String),
-    /// A generic u64
-    U64(u64),
-}
-
-/// A syscall invocation
-#[derive(Debug, Clone)]
-pub struct Syscall {
-    /// The name of the syscall that was executed
-    pub name: String,
-    /// The syscall arguments
-    pub args: Vec<SyscallArg>,
-}
+use debugger_core::SyscallArg;
 
 #[derive(Default)]
 pub struct WidgetSyscallList {

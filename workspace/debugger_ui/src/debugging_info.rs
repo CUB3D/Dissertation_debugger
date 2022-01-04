@@ -1,4 +1,4 @@
-use crate::elf::Elf;
+use debugger_core::elf::Elf;
 use std::io::Cursor;
 
 /// A subprogram (function) as defined by DWARF
@@ -112,11 +112,11 @@ pub fn parse_dwarf_info(elf_parsed: &Elf) -> DebuggingInfo {
     }
 
     if let Some(section) = elf_parsed.by_name(".rela.dyn") {
-        crate::elf::parse_rela(&mut Cursor::new(section.data), &elf_parsed);
+        debugger_core::elf::parse_rela(&mut Cursor::new(section.data), &elf_parsed);
     }
 
     if let Some(section) = elf_parsed.by_name(".rela.plt") {
-        let rela = crate::elf::parse_rela(&mut Cursor::new(section.data), &elf_parsed)
+        let rela = debugger_core::elf::parse_rela(&mut Cursor::new(section.data), &elf_parsed)
             .expect("failed to read rela.plt");
         for r in &rela {
             if let Some(name) = &r.name {
