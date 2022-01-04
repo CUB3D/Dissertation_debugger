@@ -79,16 +79,16 @@ impl DebuggerState {
     pub fn load_binary(&mut self, binary: &str) {
         let binary_content = std::fs::read(&binary).expect("Failed to read binary");
 
-/*        if let Ok(elf) = crate::elf::parse(&mut Cursor::new(binary_content)) {
+        if let Ok(elf) = crate::elf::parse(&mut Cursor::new(binary_content)) {
             self.elf = Some(BinaryFile::Elf(elf));
         } else {
             if let Ok(pe) = exe::PEImage::from_disk_file(binary) {
                 self.elf = Some(BinaryFile::PE(pe));
             }
-        }*/
+        }
 
         self.client = Some(NativeDebuggingClient::default());
-        let (sender, reciever) = self.client.as_mut().unwrap().start(&binary);
+        let (sender, reciever) = self.client.as_mut().unwrap().start(&binary, &[]);
         self.sender = Some(sender);
         self.reciever = Some(reciever);
     }
@@ -175,6 +175,9 @@ impl DebuggerState {
                         .find(|p| p.process == pid)
                         .expect("No process to set mem for")
                         .memory = mem;
+                }
+                DebuggerMsg::ProcessDeath(pid, status) => {
+                    unimplemented!("Proc death");
                 }
             }
         }

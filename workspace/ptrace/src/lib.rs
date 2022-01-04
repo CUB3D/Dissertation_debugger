@@ -408,7 +408,7 @@ impl Breakpoint {
         let patched_instruction = (original_instruction & 0xFFFF_FFFF_FFFF_FF00u64) | 0xCC;
         // Write the patched instruction to the text section
         unsafe { libc::ptrace(libc::PTRACE_POKETEXT, child.0, self.address, patched_instruction) };
-        println!("Installed bp @ 0x{:x}", self.address);
+        // println!("Installed bp @ 0x{:x}", self.address);
         return true;
     }
 

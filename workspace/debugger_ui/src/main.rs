@@ -11,7 +11,6 @@ pub mod breakpoints;
 pub mod child_process;
 pub mod controls;
 pub mod debugger_ui;
-pub mod debugging_client;
 pub mod debugging_info;
 pub mod disassemble;
 pub mod elf_info;
