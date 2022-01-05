@@ -546,7 +546,6 @@ impl Ptrace {
 
         if child == 0 {
             let child_pid = unsafe { libc::getpid() };
-            println!("Child pid = {}", child_pid);
             // Mark the child for tracing
             Process::ptrace_traceme();
 
