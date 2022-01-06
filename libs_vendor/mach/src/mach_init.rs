@@ -6,6 +6,7 @@ extern "C" {
     pub fn mach_thread_self() -> thread_port_t;
 }
 
+
 #[cfg(test)]
 mod tests {
     use mach_init::*;
