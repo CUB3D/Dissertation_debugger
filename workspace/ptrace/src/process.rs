@@ -8,6 +8,7 @@ use crate::WaitStatus;
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
 pub struct Process(pub i32);
 
+#[cfg(target_os = "linux")]
 impl Process {
     /// Wait for the current process, returning the status
     pub fn wait_for(&self) -> WaitStatus {

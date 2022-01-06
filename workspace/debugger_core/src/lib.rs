@@ -1,5 +1,6 @@
 //! A client for debugging a given process, handles process spawning and event handling for a given platform
 #![feature(seek_stream_len)]
+#![feature(new_uninit)]
 pub mod types;
 pub mod debugger_state;
 pub mod common_binary_file;
@@ -34,7 +35,7 @@ pub use linux_ptrace_debugging_client::LinuxPtraceDebuggingClient as NativeDebug
 #[cfg(target_os = "windows")]
 pub use windows_debugging_client::WindowsNTDebuggingClient as NativeDebuggingClient;
 #[cfg(target_os = "macos")]
-pub use mac::DarwinDebuggingClient as NativeDebuggingClient;
+pub use mac_debugging_client::DarwinDebuggingClient as NativeDebuggingClient;
 
 #[cfg(not(target_os = "linux"))]
 #[derive(Copy, Clone, Debug)]

@@ -9,9 +9,10 @@ edition = "2021"
 libc = "0.2.108"
 crossbeam-channel = "0.5.1"
 exe = "0.4.5"
+fat-macho = "0.4.4"
 
 [target.'cfg(target_os = "linux")'.dependencies]
-ptrace = { path = "../ptrace", features = ["breakpoints", "child_processes"]}
+#ptrace = { path = "../ptrace", features = ["breakpoints", "child_processes"]}
 unwind = {version = "0.4.0", features=["ptrace"]}
 
 [target.'cfg(target_os = "macos")'.dependencies]
