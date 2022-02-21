@@ -98,7 +98,7 @@ pub enum DebuggerMsg {
     /// The process has spawned
     ProcessSpawn(Process),
     /// The given process has died with the given status
-    ProcessDeath(Process, usize),
+    ProcessDeath(Process, isize),
     /// A child process has spawned
     ChildProcessSpawn(Process),
     /// The process has stopped, we have a new call stack to display

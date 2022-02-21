@@ -552,8 +552,10 @@ impl Ptrace {
             // Mark that this process should not use ASLR so we can set breakpoints easily
             unsafe { libc::personality(libc::ADDR_NO_RANDOMIZE as u64) };
 
+            let x = CString::new("-x").unwrap();
+
             // Spawn the child
-            let r = unsafe { libc::execl(self.process.as_ptr(), self.process_name.as_ptr(), self.arg.as_ptr(), 0)};
+            let r = unsafe { libc::execl(self.process.as_ptr(), self.process_name.as_ptr(), x.as_ptr(), self.arg.as_ptr(), 0)};
             panic!("Failed to start subprocess: {} {}", r, unsafe { *libc::__errno_location()});
         }
 

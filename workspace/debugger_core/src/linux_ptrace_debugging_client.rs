@@ -27,7 +27,8 @@ pub enum PtraceEvent {
     TryGetRegisters,
     TryGetMemory,
     Syscall,
-    Exit,
+    /// The process has exited with the given status
+    Exit(isize),
     SpawnChild,
     Trap,
 }
@@ -150,13 +151,14 @@ impl EventDrivenPtraceDebugger {
                             events.push(PtraceEvent::SpawnChild);
                         }
                         libc::PTRACE_EVENT_EXIT => {
-                            events.push(PtraceEvent::Exit);
+                            let exit_status = pid.ptrace_geteventmsg();
+                            events.push(PtraceEvent::Exit(exit_status as isize));
                         }
                         _ => panic!("Unknown ptrace event: {}", event),
                     }
                 }
             } else {
-                events.push(PtraceEvent::Exit);
+                events.push(PtraceEvent::Exit(-stopsig as isize));
             }
         }
 
@@ -456,8 +458,7 @@ impl DebuggingClient for LinuxPtraceDebuggingClient {
                                         .send(DebuggerMsg::SyscallTrap)
                                         .expect("Failed to send from debug");
                                 }
-                                PtraceEvent::Exit => {
-                                    let exit_status = pid.ptrace_geteventmsg();
+                                PtraceEvent::Exit(exit_status) => {
                                     println!(
                                         "child {:?} exit with status {}, assuming finished",
                                         pid, exit_status
