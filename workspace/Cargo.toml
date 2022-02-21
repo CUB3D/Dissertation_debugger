@@ -1,2 +1,2 @@
 [workspace]
-members =  ["./debugger_ui", "./ptrace", "./debugger_core"]
+members =  ["./debugger_ui", "./debugger_core"]
