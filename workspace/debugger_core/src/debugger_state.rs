@@ -1,7 +1,7 @@
 #[cfg(target_os = "windows")]
 use crate::{Breakpoint, Process, FpRegs};
 #[cfg(target_os = "macos")]
-use create::{Breakpoint, Process, FpRegs};
+use crate::{Breakpoint, Process, FpRegs};
 use crossbeam_channel::{Receiver, Sender};
 
 #[cfg(target_os = "linux")]
@@ -79,12 +79,16 @@ impl DebuggerState {
     pub fn load_binary(&mut self, binary: &str) {
         let binary_content = std::fs::read(&binary).expect("Failed to read binary");
 
-        if let Ok(elf) = crate::elf::parse(&mut Cursor::new(binary_content)) {
-            self.elf = Some(BinaryFile::Elf(elf));
+        if let Ok(fr) = fat_macho::FatReader::new(&binary_content) {
+            self.elf = Some(BinaryFile::MachO);
         } else {
-            if let Ok(pe) = exe::PEImage::from_disk_file(binary) {
-                self.elf = Some(BinaryFile::PE(pe));
-            }
+            // if let Ok(elf) = crate::elf::parse(&mut Cursor::new(binary_content)) {
+            //     self.elf = Some(BinaryFile::Elf(elf));
+            // } else {
+            //     if let Ok(pe) = exe::PEImage::from_disk_file(binary) {
+            //         self.elf = Some(BinaryFile::PE(pe));
+            //     }
+            // }
         }
 
         self.client = Some(NativeDebuggingClient::default());
