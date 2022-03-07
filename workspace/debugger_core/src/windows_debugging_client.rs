@@ -1,5 +1,5 @@
-use crate::debugging_client::{DebuggingClient, FpRegs, Process};
-use crate::memory_map::{
+use crate::{DebuggingClient, FpRegs, Process};
+use crate::types::{
     MemoryMap, MemoryMapEntry, MemoryMapEntryPermissions, MemoryMapEntryPermissionsKind,
 };
 use crate::types::UserRegs;
@@ -9,7 +9,6 @@ use crossbeam_channel::{Receiver, Sender, unbounded};
 use std::ffi::CString;
 use windows::Win32::Foundation;
 use windows::Win32::Foundation::{HANDLE, HANDLE_FLAGS, PSTR};
-use crate::FpRegs;
 
 #[derive(Default)]
 pub struct WindowsNTDebuggingClient {}
@@ -94,7 +93,7 @@ impl WindowsNTDebuggingClient {
 }
 
 impl DebuggingClient for WindowsNTDebuggingClient {
-    fn start(&mut self, binary_path: &str) -> (Sender<Msg>, Receiver<DebuggerMsg>) {
+    fn start(&mut self, binary_path: &str, args: &[&str]) -> (Sender<Msg>, Receiver<DebuggerMsg>) {
         let (send_from_debug, rec_from_debug) = unbounded();
         let (sender, reciever) = unbounded();
 
@@ -224,7 +223,7 @@ impl DebuggingClient for WindowsNTDebuggingClient {
                                     })
                                 }
                             }
-                            send_from_debug.send(DebuggerMsg::MemoryMap(MemoryMap(mmap)));
+                            send_from_debug.send(DebuggerMsg::MemoryMap(Process(pi.dwProcessId as i32), MemoryMap(mmap)));
 
                             let (user_regs, fp_regs) = WindowsNTDebuggingClient::get_context(pi.dwThreadId);
                             send_from_debug.send(DebuggerMsg::UserRegisters(Process(pi.dwProcessId as i32), user_regs));
