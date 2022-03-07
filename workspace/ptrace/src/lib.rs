@@ -1,5 +1,10 @@
 #![feature(new_uninit)]
 
+#[cfg(target_os = "linux")]
+pub use linux_ptrace::*;
+
+#[cfg(target_os = "linux")]
+mod linux_ptrace{
 use std::ffi::CString;
 use std::error::Error;
 use std::collections::BTreeMap;
@@ -946,4 +951,5 @@ impl Ptrace {
             action,
         });
     }
+}
 }

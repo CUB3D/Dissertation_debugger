@@ -490,7 +490,6 @@ dependencies = [
  "goblin",
  "libc",
  "mach",
- "ptrace",
  "unwind",
  "windows",
 ]
