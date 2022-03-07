@@ -2,19 +2,22 @@
 
 #[cfg(target_os = "linux")]
 pub use linux_ptrace::*;
+#[cfg(target_os = "linux")]
+pub mod process;
+#[cfg(target_os = "linux")]
+pub use process::*;
 
 #[cfg(target_os = "linux")]
 mod linux_ptrace{
-use std::ffi::CString;
-use std::error::Error;
-use std::collections::BTreeMap;
-use std::ops::{Range};
-use std::fmt::Debug;
-#[cfg(feature = "child_processes")]
-use std::ops::Deref;
+    use crate::process::Process;
+    use std::ffi::CString;
+    use std::error::Error;
+    use std::collections::BTreeMap;
+    use std::ops::{Range};
+    use std::fmt::Debug;
+    #[cfg(feature = "child_processes")]
+    use std::ops::Deref;
 
-pub mod process;
-pub use process::Process;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Event {

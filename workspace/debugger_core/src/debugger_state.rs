@@ -124,6 +124,8 @@ impl DebuggerState {
 
 
                     if self.auto_stp {
+                        //TODO: shouldnt have to do this, not handling syscall enter/exit properly
+                        self.sender.as_ref().unwrap().send(Msg::Continue);
                         self.sender.as_ref().unwrap().send(Msg::Continue);
                     }
                 }
