@@ -79,17 +79,24 @@ impl DebuggerState {
     pub fn load_binary(&mut self, binary: &str) {
         let binary_content = std::fs::read(&binary).expect("Failed to read binary");
 
-        if let Ok(fr) = fat_macho::FatReader::new(&binary_content) {
-            self.elf = Some(BinaryFile::MachO);
-        } else {
-            // if let Ok(elf) = crate::elf::parse(&mut Cursor::new(binary_content)) {
-            //     self.elf = Some(BinaryFile::Elf(elf));
-            // } else {
+        // if let Ok(fr) = fat_macho::FatReader::new(&binary_content) {
+        //     self.elf = Some(BinaryFile::MachO);
+        // } else {
+            if let Ok(elf) = crate::elf::parse(&mut Cursor::new(binary_content.clone())) {
+                let gelf = goblin::elf::Elf::parse(&binary_content).unwrap();
+                if let Some(malloc) = gelf.syms.iter().find(|a| gelf.strtab.get_at(a.st_name).unwrap() == "malloc").map(|m| m.st_value as usize) {
+                    println!("malloc = {}", malloc);
+                }
+                //TODO: symbols ui + breakpoints on symbol adding
+                // When break on malloc/free track the ptrs
+
+                self.elf = Some(BinaryFile::Elf(elf));
+            } //else {
             //     if let Ok(pe) = exe::PEImage::from_disk_file(binary) {
             //         self.elf = Some(BinaryFile::PE(pe));
             //     }
             // }
-        }
+        // }
 
         self.client = Some(NativeDebuggingClient::default());
         let (sender, reciever) = self.client.as_mut().unwrap().start(&binary, &[]);
