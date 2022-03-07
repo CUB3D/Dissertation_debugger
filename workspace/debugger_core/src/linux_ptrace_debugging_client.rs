@@ -457,6 +457,7 @@ impl DebuggingClient for LinuxPtraceDebuggingClient {
                                     send_from_debug
                                         .send(DebuggerMsg::SyscallTrap)
                                         .expect("Failed to send from debug");
+                                    println!("Sent a syscall trap");
                                 }
                                 PtraceEvent::Exit(exit_status) => {
                                     println!(
@@ -509,7 +510,10 @@ impl DebuggingClient for LinuxPtraceDebuggingClient {
                             let msg = reciever.recv().expect("No continue");
                             debugger.local_debugger_state.apply_state_transform(msg.clone());
                             match msg {
-                                Msg::Continue => break,
+                                Msg::Continue => {
+                                    println!("Continuing");
+                                    break
+                                },
                                 Msg::SingleStep(s) => is_singlestep = s,
                                 Msg::AddBreakpoint(_bp) => {
                                     //TODO: does this work with bp on other threads?
