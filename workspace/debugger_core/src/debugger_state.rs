@@ -64,7 +64,7 @@ pub struct DebuggerState {
     pub process: Option<Process>,
     pub process_state: Vec<ProcessState>,
     pub elf: Option<BinaryFile>,
-    pub auto_stp: bool,
+    pub auto_step: bool,
     pub single_step_mode: bool,
     pub started: bool,
     pub current_breakpoint: Option<Breakpoint>,
@@ -77,20 +77,24 @@ pub struct DebuggerState {
 
 impl DebuggerState {
     pub fn load_binary(&mut self, binary: &str) {
+        //TODO: do with default
+        self.auto_step = true;
+
         let binary_content = std::fs::read(&binary).expect("Failed to read binary");
 
         // if let Ok(fr) = fat_macho::FatReader::new(&binary_content) {
         //     self.elf = Some(BinaryFile::MachO);
         // } else {
-            if let Ok(elf) = crate::elf::parse(&mut Cursor::new(binary_content.clone())) {
-                let gelf = goblin::elf::Elf::parse(&binary_content).unwrap();
+            if let Ok(gelf) = goblin::elf::Elf::parse(&binary_content) {
                 if let Some(malloc) = gelf.syms.iter().find(|a| gelf.strtab.get_at(a.st_name).unwrap() == "malloc").map(|m| m.st_value as usize) {
                     println!("malloc = {}", malloc);
                 }
                 //TODO: symbols ui + breakpoints on symbol adding
                 // When break on malloc/free track the ptrs
 
-                self.elf = Some(BinaryFile::Elf(elf));
+                let elf = Box::new(gelf);
+
+                self.elf = Some(BinaryFile::Elf(binary_content));
             } //else {
             //     if let Ok(pe) = exe::PEImage::from_disk_file(binary) {
             //         self.elf = Some(BinaryFile::PE(pe));
@@ -115,7 +119,7 @@ impl DebuggerState {
                 DebuggerMsg::Trap => {
                     self.halt_reason = "Trap".to_string();
 
-                    if self.auto_stp {
+                    if self.auto_step {
                         self.sender.as_ref().unwrap().send(Msg::Continue);
                     }
                 }
@@ -123,7 +127,7 @@ impl DebuggerState {
                     self.halt_reason = "Syscall Trap".to_string();
 
 
-                    if self.auto_stp {
+                    if self.auto_step {
                         //TODO: shouldnt have to do this, not handling syscall enter/exit properly
                         self.sender.as_ref().unwrap().send(Msg::Continue);
                         self.sender.as_ref().unwrap().send(Msg::Continue);
@@ -190,7 +194,9 @@ impl DebuggerState {
                         .memory = mem;
                 }
                 DebuggerMsg::ProcessDeath(pid, status) => {
-                    unimplemented!("Proc death");
+                    self.halt_reason = format!("Process died, pid = {}", pid.0);
+
+                    println!("Proc death, pid = {:?}, status = {:?}", pid, status);
                 }
             }
         }

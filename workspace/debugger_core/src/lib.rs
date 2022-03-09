@@ -4,10 +4,10 @@
 pub mod types;
 pub mod debugger_state;
 pub mod common_binary_file;
-pub mod elf;
+// pub mod elf;
 pub use types::*;
 pub use debugger_state::*;
-pub use elf::*;
+// pub use elf::*;
 use std::ops::Range;
 use crossbeam_channel::{Receiver, Sender};
 

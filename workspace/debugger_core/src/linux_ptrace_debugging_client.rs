@@ -90,8 +90,7 @@ impl EventDrivenPtraceDebugger {
         Ok(CallStack(call_stack))
     }
 
-    pub fn wait_for_event(&mut self) -> (Process, Vec<PtraceEvent>) {
-        let mut events = Vec::new();
+    pub fn wait_for_event(&mut self, events: &mut Vec<PtraceEvent>) -> (Process) {
 
         let local_debugger_state = &mut self.local_debugger_state;
         let in_syscall = &mut self.in_syscall;
@@ -113,7 +112,7 @@ impl EventDrivenPtraceDebugger {
                 } else {
                     pid.ptrace_syscall();
                     in_syscall.insert(pid, false);
-                    return (pid, events);
+                    return (pid);
                 }
             } else if stopsig == libc::SIGTRAP {
                 let event = status.0 >> 16;
@@ -162,7 +161,7 @@ impl EventDrivenPtraceDebugger {
             }
         }
 
-        (pid, events)
+        (pid)
     }
 }
 
@@ -411,9 +410,11 @@ impl DebuggingClient for LinuxPtraceDebuggingClient {
                     let mut is_singlestep = false;
                     let mut local_debugger_state = DebuggerState::default();
 
+                    let mut events = Vec::new();
+
                     'big_exit: loop {
-                        let (pid, evts) = debugger.wait_for_event();
-                        for evt in evts {
+                        let (pid) = debugger.wait_for_event(&mut events);
+                        while let Some(evt) = events.pop() {
                             match evt {
                                 PtraceEvent::TryGetCallStack => {
                                     // If we can get a call stack, forward that to the ui
@@ -457,7 +458,6 @@ impl DebuggingClient for LinuxPtraceDebuggingClient {
                                     send_from_debug
                                         .send(DebuggerMsg::SyscallTrap)
                                         .expect("Failed to send from debug");
-                                    println!("Sent a syscall trap");
                                 }
                                 PtraceEvent::Exit(exit_status) => {
                                     println!(
@@ -511,7 +511,6 @@ impl DebuggingClient for LinuxPtraceDebuggingClient {
                             debugger.local_debugger_state.apply_state_transform(msg.clone());
                             match msg {
                                 Msg::Continue => {
-                                    println!("Continuing");
                                     break
                                 },
                                 Msg::SingleStep(s) => is_singlestep = s,
