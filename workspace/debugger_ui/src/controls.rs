@@ -44,9 +44,13 @@ impl WidgetControls {
 
 impl InnerRender for WidgetControls {
     fn render_inner(&mut self, state: &mut DebuggerState, ui: &Ui) {
+        if state.elf.is_none() {
+            ui.text("Open a binary with `File > open` to begin");
+            return;
+        }
 
         // Show start button only if a file is loaded
-        if state.elf.is_some() || true {
+        if state.elf.is_some() {
             if state.process.is_some() {
                 // Restart button, only shown when a process is currently running
                 if ui.small_button("Restart") {
@@ -57,17 +61,15 @@ impl InnerRender for WidgetControls {
                         .send(Msg::Restart)
                         .expect("Failed to send msg");
                 }
-            } else {
-                // Start button, only shown when no process is currently running
-                if ui.small_button("|>") {
-                    state
-                        .sender
-                        .as_ref()
-                        .unwrap()
-                        .send(Msg::Start)
-                        .expect("Failed to send msg");
-                    state.started = true;
-                }
+            
+            if ui.small_button("Continue") {
+                state
+                    .sender
+                    .as_ref()
+                    .unwrap()
+                    .send(Msg::Start)
+                    .expect("Failed to send msg");
+            }
             }
         }
 
@@ -86,7 +88,7 @@ impl InnerRender for WidgetControls {
 
         ui.text(format!("Halt reason: {}", &state.halt_reason));
 
-        if state.started {
+        /*if state.started {
             if ui.checkbox("Auto step", &mut state.auto_stp) {
                 if state.auto_stp {
                     self.send_continue(state);
@@ -106,6 +108,6 @@ impl InnerRender for WidgetControls {
                     .send(Msg::SingleStep(state.single_step_mode))
                     .expect("Failed to send msg");
             }
-        }
+        }*/
     }
 }

@@ -75,14 +75,14 @@ impl Process {
     /// Get the user registers of the process
     pub fn ptrace_getregs(&self) -> Box<UserRegs> {
         let mut regs = Box::<UserRegs>::default();
-        assert_ne!(-1, unsafe { libc::ptrace(libc::PTRACE_GETREGS, self.0, 0, regs.as_mut() as *mut _)});
+        /*assert_ne!(-1, */unsafe { libc::ptrace(libc::PTRACE_GETREGS, self.0, 0, regs.as_mut() as *mut _)};/*);*/
         regs
     }
 
     /// Get the fp regs of the process
     pub fn ptrace_getfpregs(&self) -> Box<FpRegs> {
         let mut fpregs = unsafe { Box::<FpRegs>::new_zeroed().assume_init() };
-        assert_ne!(-1, unsafe { libc::ptrace(libc::PTRACE_GETFPREGS, self.0, 0, fpregs.as_mut() as *mut _)});
+        /*assert_ne!(-1, */unsafe { libc::ptrace(libc::PTRACE_GETFPREGS, self.0, 0, fpregs.as_mut() as *mut _)}/*)*/;
         fpregs
     }
 
