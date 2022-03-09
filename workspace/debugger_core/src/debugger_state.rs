@@ -119,8 +119,10 @@ impl DebuggerState {
         //     self.elf = Some(BinaryFile::MachO);
         // } else {
             if let Ok(gelf) = goblin::elf::Elf::parse(&binary_content) {
-                if let Some(malloc) = gelf.syms.iter().find(|a| gelf.strtab.get_at(a.st_name).unwrap() == "malloc").map(|m| m.st_value as usize) {
+                if let Some(malloc) = gelf.syms.iter().find(|a| gelf.strtab.get_at(a.st_name).unwrap() == "malloc@plt").map(|m| m.st_value as usize) {
                     println!("malloc = {}", malloc);
+                } else {
+                    println!("No malloc");
                 }
                 //TODO: symbols ui + breakpoints on symbol adding
                 // When break on malloc/free track the ptrs
