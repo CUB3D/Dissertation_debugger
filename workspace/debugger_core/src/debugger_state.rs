@@ -61,10 +61,14 @@ impl ProcessState {
     }
 }
 
+#[derive(Copy, Clone, Eq, PartialEq)]
 pub enum DebuggerStatus {
     NoBinaryYet,
     ReadyToStart,
     Running,
+    Breakpoint,
+    Paused,
+    Dead,
 }
 
 impl Default for DebuggerStatus {
@@ -78,6 +82,9 @@ impl DebuggerStatus {
            Self::NoBinaryYet => format!("Load a binary to start"),
            Self::ReadyToStart => format!("Ready to start"),
            Self::Running => format!("Running"),
+           Self::Breakpoint => format!("Breakpoint"),
+           Self::Paused => format!("Paused"),
+           Self::Dead => format!("Dead"),
        }
     }
 }
@@ -89,7 +96,7 @@ pub struct DebuggerState {
     pub process: Option<Process>,
     pub process_state: Vec<ProcessState>,
     pub elf: Option<BinaryFile>,
-    pub auto_stp: bool,
+    pub auto_step: bool,
     pub single_step_mode: bool,
     pub started: bool,
     pub current_breakpoint: Option<Breakpoint>,
@@ -103,20 +110,24 @@ pub struct DebuggerState {
 
 impl DebuggerState {
     pub fn load_binary(&mut self, binary: &str) {
+        //TODO: do with default
+        self.auto_step = true;
+
         let binary_content = std::fs::read(&binary).expect("Failed to read binary");
 
         // if let Ok(fr) = fat_macho::FatReader::new(&binary_content) {
         //     self.elf = Some(BinaryFile::MachO);
         // } else {
-            if let Ok(elf) = crate::elf::parse(&mut Cursor::new(binary_content.clone())) {
-                let gelf = goblin::elf::Elf::parse(&binary_content).unwrap();
+            if let Ok(gelf) = goblin::elf::Elf::parse(&binary_content) {
                 if let Some(malloc) = gelf.syms.iter().find(|a| gelf.strtab.get_at(a.st_name).unwrap() == "malloc").map(|m| m.st_value as usize) {
                     println!("malloc = {}", malloc);
                 }
                 //TODO: symbols ui + breakpoints on symbol adding
                 // When break on malloc/free track the ptrs
 
-                self.elf = Some(BinaryFile::Elf(elf));
+                let elf = Box::new(gelf);
+
+                self.elf = Some(BinaryFile::Elf(binary_content));
             } //else {
             //     if let Ok(pe) = exe::PEImage::from_disk_file(binary) {
             //         self.elf = Some(BinaryFile::PE(pe));
@@ -143,11 +154,7 @@ impl DebuggerState {
             match msg {
                 DebuggerMsg::Trap => {
                     self.halt_reason = "Trap".to_string();
-                    self.sender.as_ref().unwrap().send(Msg::Continue);
-
-                    /*if self.auto_stp {
-                        self.sender.as_ref().unwrap().send(Msg::Continue);
-                    }*/
+                    self.status = DebuggerStatus::Paused;
                 }
                 DebuggerMsg::SyscallTrap => {
                     self.halt_reason = "Syscall Trap".to_string();
@@ -155,7 +162,7 @@ impl DebuggerState {
                     self.sender.as_ref().unwrap().send(Msg::Continue);
 
 
-                    /*if self.auto_stp {
+                    /*if self.auto_step {
                         //TODO: shouldnt have to do this, not handling syscall enter/exit properly
                         self.sender.as_ref().unwrap().send(Msg::Continue);
                         self.sender.as_ref().unwrap().send(Msg::Continue);
@@ -166,9 +173,18 @@ impl DebuggerState {
 
                     // int3 never auto continues
                     self.current_breakpoint = Some(breakpoint);
+                    self.status = DebuggerStatus::Breakpoint;
                 }
                 DebuggerMsg::ProcessSpawn(p) => {
-                    self.status = DebuggerStatus::Running;
+                    // This is a restart
+                    // TODO: have a reset debugger msg
+                    if self.process.is_some() {
+                        self.process_state.clear();
+                        for bp in &self.breakpoints {
+                            self.sender.as_ref().unwrap().send(Msg::AddBreakpoint(*bp));
+                        }
+                    }
+
                     self.process = Some(p);
                     self.process_state.push(ProcessState::with_process(p));
                     self.halt_reason = "Process Started".to_string();
@@ -227,6 +243,15 @@ impl DebuggerState {
                         .iter_mut()
                         .find(|p| p.process == pid)
                         .expect("No process to mark dead").alive = false;
+
+                    self.halt_reason = format!("Process died, pid = {}", pid.0);
+
+                    //println!("Proc death, pid = {:?}, status = {:?}", pid, status);
+
+                    if !self.process_state.first().unwrap().alive {
+                        self.halt_reason = format!("parent died");
+                        self.status = DebuggerStatus::Dead;
+                    }
                 }
             }
         }
@@ -237,7 +262,9 @@ impl DebuggerState {
     /// for all recieved messages -> the two states will always remain in sync
     pub fn apply_state_transform(&mut self, msg: Msg) {
         match msg {
-            Msg::Start => {}
+            Msg::Start => {
+                self.status = DebuggerStatus::Running;
+            }
             Msg::Continue => {}
             Msg::SingleStep(_) => {}
             Msg::AddBreakpoint(b) => self.breakpoints.push(b),
