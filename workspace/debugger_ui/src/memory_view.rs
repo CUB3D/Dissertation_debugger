@@ -1,5 +1,6 @@
 use crate::debugger_ui::widget::{InnerRender, UiMenu};
 use crate::{define_ui_menu, DebuggerState};
+use imgui_memory_editor::MemoryEditor;
 
 use imgui::{TableColumnSetup, Ui, Window};
 
@@ -57,6 +58,17 @@ impl InnerRender for WidgetMemoryView {
 
             table.end();
         }
+
+        // for state in &state.process_state {
+        //     let mut memory_editor = MemoryEditor::<ProcessState>::new()
+        //     .read_only(true)
+        //     .mem_size(state.memory.iter().map(|(m, _)| m.len()).sum());
+        //     .read_fn(|mem, offset| {
+        //         for chunk in mem
+
+        //         mem.read(offset)
+        //     });
+        // }
 
 
     }

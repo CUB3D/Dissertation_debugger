@@ -22,10 +22,6 @@ use unwind::{Accessors, AddressSpace, Byteorder, Cursor as StackCursor, PTraceSt
 #[derive(Debug, Clone)]
 pub enum PtraceEvent {
     BreakpointHit(Breakpoint),
-    TryGetCallStack,
-    TryGetMemoryMap,
-    TryGetRegisters,
-    TryGetMemory,
     Syscall,
     /// The process has exited with the given status
     Exit(isize),
@@ -50,7 +46,7 @@ impl EventDrivenPtraceDebugger {
 
     pub fn start(&mut self) -> Process {
         let child = self.debugger.inital_spawn_child();
-        child.ptrace_singlestep();
+        //child.ptrace_singlestep();
         child
     }
 
@@ -99,10 +95,6 @@ impl EventDrivenPtraceDebugger {
         let (pid, status) = Process::wait_any();
 
         if status.wifstopped() {
-            events.push(PtraceEvent::TryGetCallStack);
-            events.push(PtraceEvent::TryGetMemoryMap);
-            events.push(PtraceEvent::TryGetRegisters);
-            events.push(PtraceEvent::TryGetMemory);
 
             // Handle the various trap types
             let stopsig = status.wstopsig();
@@ -134,7 +126,6 @@ impl EventDrivenPtraceDebugger {
                                 user_regs.ip - 1,
                             )
                         };
-                        events.push(PtraceEvent::TryGetRegisters);
                         events.push(PtraceEvent::BreakpointHit(*bp));
                     } else {
                         events.push(PtraceEvent::Trap);
@@ -398,15 +389,16 @@ impl DebuggingClient for LinuxPtraceDebuggingClient {
 
             let mut debugger = EventDrivenPtraceDebugger::new(&binary_path, "Debuggee", &farg);
 
+            let child = debugger.start();
+
+            send_from_debug
+                .send(DebuggerMsg::ProcessSpawn(child))
+                .expect("Send proc");
+
             let msg = reciever.recv().expect("failed to get msg");
             match msg {
                 Msg::Start => {
-                    let child = debugger.start();
-
-                    send_from_debug
-                        .send(DebuggerMsg::ProcessSpawn(child))
-                        .expect("Send proc");
-
+                    child.ptrace_singlestep();
 
                     let mut is_singlestep = false;
                     let mut local_debugger_state = DebuggerState::default();
@@ -414,21 +406,26 @@ impl DebuggingClient for LinuxPtraceDebuggingClient {
                     'big_exit: loop {
                         let (pid, evts) = debugger.wait_for_event();
                         for evt in evts {
+                            println!("evt = {:?}", evt); 
                             match evt {
-                                PtraceEvent::TryGetCallStack => {
-                                    // If we can get a call stack, forward that to the ui
-                                    if let Ok(call_stack) = debugger.get_call_stack(pid) {
-                                        send_from_debug.send(DebuggerMsg::CallStack(pid, call_stack));
-                                    }
+                                PtraceEvent::Syscall => {
+                                    let mut user_regs = pid.ptrace_getregs();
+                                    // Figure out the details of the syscall
+                                    let syscall_desc =
+                                        LinuxPtraceDebuggingClient::get_syscall_description(
+                                            pid, &user_regs,
+                                        );
+                                    send_from_debug.send(DebuggerMsg::Syscall(pid, syscall_desc));
+                                    pid.ptrace_syscall();
+                                    continue 'big_exit;
+                                    /*send_from_debug
+                                        .send(DebuggerMsg::SyscallTrap)
+                                        .expect("Failed to send from debug");
+                                    println!("Sent a syscall trap");*/
+
                                 }
-                                PtraceEvent::TryGetMemoryMap => {
-                                    // If we can get a memory map for the process
-                                    if let Some(mmap) = LinuxPtraceDebuggingClient::get_memory_map(pid)
-                                    {
-                                        send_from_debug.send(DebuggerMsg::MemoryMap(pid, mmap));
-                                    }
-                                }
-                                PtraceEvent::TryGetRegisters => {
+                                PtraceEvent::Exit(exit_status) => {
+                                    // Try and send regs
                                     let mut user_regs = pid.ptrace_getregs();
                                     let fp_regs = pid.ptrace_getfpregs();
 
@@ -440,26 +437,7 @@ impl DebuggingClient for LinuxPtraceDebuggingClient {
                                     .send(DebuggerMsg::UserRegisters(pid, user_regs_ui.clone()));
                                     send_from_debug
                                     .send(DebuggerMsg::FpRegisters(pid, fp_regs.clone()));
-                                }
-                                PtraceEvent::TryGetMemory => {
-                                    let memory = LinuxPtraceDebuggingClient::get_memory(pid);
-                                    send_from_debug
-                                        .send(DebuggerMsg::Memory(pid, memory));
-                                }
-                                PtraceEvent::Syscall => {
-                                    let mut user_regs = pid.ptrace_getregs();
-                                    // Figure out the details of the syscall
-                                    let syscall_desc =
-                                        LinuxPtraceDebuggingClient::get_syscall_description(
-                                            pid, &user_regs,
-                                        );
-                                    send_from_debug.send(DebuggerMsg::Syscall(pid, syscall_desc));
-                                    send_from_debug
-                                        .send(DebuggerMsg::SyscallTrap)
-                                        .expect("Failed to send from debug");
-                                    println!("Sent a syscall trap");
-                                }
-                                PtraceEvent::Exit(exit_status) => {
+
                                     println!(
                                         "child {:?} exit with status {}, assuming finished",
                                         pid, exit_status
@@ -494,19 +472,50 @@ impl DebuggingClient for LinuxPtraceDebuggingClient {
 
                                 }
                                 PtraceEvent::Trap => {
-                                    send_from_debug
+                                    /*send_from_debug
                                         .send(DebuggerMsg::Trap)
-                                        .expect("Faeild to send from debug");
+                                        .expect("Faeild to send from debug");*/
+                                    pid.ptrace_syscall();
+                                    continue 'big_exit;
                                 }
                                 PtraceEvent::BreakpointHit(bp) => {
                                     send_from_debug
                                         .send(DebuggerMsg::BPTrap { breakpoint: bp })
                                         .expect("Faeild to send from debug");
+
+                                    // If we can get a call stack, forward that to the ui
+                                    if let Ok(call_stack) = debugger.get_call_stack(pid) {
+                                        send_from_debug.send(DebuggerMsg::CallStack(pid, call_stack));
+                                    }
+
+                                    // If we can get a memory map for the process
+                                    if let Some(mmap) = LinuxPtraceDebuggingClient::get_memory_map(pid)
+                                    {
+                                        send_from_debug.send(DebuggerMsg::MemoryMap(pid, mmap));
+                                    }
+
+                                    // Try and send regs
+                                    let mut user_regs = pid.ptrace_getregs();
+                                    let fp_regs = pid.ptrace_getfpregs();
+
+                                    let user_regs_ui =
+                                    LinuxPtraceDebuggingClient::convert_ptrace_registers(
+                                    &user_regs,
+                                    );
+                                    send_from_debug
+                                    .send(DebuggerMsg::UserRegisters(pid, user_regs_ui.clone()));
+                                    send_from_debug
+                                    .send(DebuggerMsg::FpRegisters(pid, fp_regs.clone()));
+                                    
+                                    // Try and send memory state
+                                    let memory = LinuxPtraceDebuggingClient::get_memory(pid);
+                                    send_from_debug
+                                        .send(DebuggerMsg::Memory(pid, memory));
                                 }
                             }
                         }
 
-                        loop {
+                        for _ in 0..0 {
                             let msg = reciever.recv().expect("No continue");
                             debugger.local_debugger_state.apply_state_transform(msg.clone());
                             match msg {

@@ -41,6 +41,8 @@ pub struct ProcessState {
     pub memory_map: Option<MemoryMap>,
     /// The syscall history of the process
     pub syscall_list: Vec<Syscall>,
+    /// True if the process is currently alive, false if it's dead
+    pub alive: bool,
 }
 
 impl ProcessState {
@@ -54,9 +56,32 @@ impl ProcessState {
             call_stack: None,
             memory_map: None,
             syscall_list: Vec::new(),
+            alive: true,
         }
     }
 }
+
+pub enum DebuggerStatus {
+    NoBinaryYet,
+    ReadyToStart,
+    Running,
+}
+
+impl Default for DebuggerStatus {
+    fn default() -> Self {
+        Self::NoBinaryYet
+    }
+}
+impl DebuggerStatus {
+    pub fn description(&self) -> String {
+       match self {
+           Self::NoBinaryYet => format!("Load a binary to start"),
+           Self::ReadyToStart => format!("Ready to start"),
+           Self::Running => format!("Running"),
+       }
+    }
+}
+
 
 #[derive(Default)]
 pub struct DebuggerState {
@@ -69,6 +94,7 @@ pub struct DebuggerState {
     pub started: bool,
     pub current_breakpoint: Option<Breakpoint>,
     pub halt_reason: String,
+    pub status: DebuggerStatus,
     //TODO: group these three together, if we have one we should have all
     pub sender: Option<Sender<Msg>>,
     pub reciever: Option<Receiver<DebuggerMsg>>,
@@ -102,6 +128,9 @@ impl DebuggerState {
         let (sender, reciever) = self.client.as_mut().unwrap().start(&binary, &[]);
         self.sender = Some(sender);
         self.reciever = Some(reciever);
+        
+        self.status = DebuggerStatus::ReadyToStart;
+        self.started = true;
     }
 
     pub fn process_incoming_message(&mut self) {
@@ -114,20 +143,23 @@ impl DebuggerState {
             match msg {
                 DebuggerMsg::Trap => {
                     self.halt_reason = "Trap".to_string();
+                    self.sender.as_ref().unwrap().send(Msg::Continue);
 
-                    if self.auto_stp {
+                    /*if self.auto_stp {
                         self.sender.as_ref().unwrap().send(Msg::Continue);
-                    }
+                    }*/
                 }
                 DebuggerMsg::SyscallTrap => {
                     self.halt_reason = "Syscall Trap".to_string();
+                    self.sender.as_ref().unwrap().send(Msg::Continue);
+                    self.sender.as_ref().unwrap().send(Msg::Continue);
 
 
-                    if self.auto_stp {
+                    /*if self.auto_stp {
                         //TODO: shouldnt have to do this, not handling syscall enter/exit properly
                         self.sender.as_ref().unwrap().send(Msg::Continue);
                         self.sender.as_ref().unwrap().send(Msg::Continue);
-                    }
+                    }*/
                 }
                 DebuggerMsg::BPTrap { breakpoint } => {
                     self.halt_reason = format!("Breakpoint hit @ {:X}", breakpoint.address);
@@ -136,6 +168,7 @@ impl DebuggerState {
                     self.current_breakpoint = Some(breakpoint);
                 }
                 DebuggerMsg::ProcessSpawn(p) => {
+                    self.status = DebuggerStatus::Running;
                     self.process = Some(p);
                     self.process_state.push(ProcessState::with_process(p));
                     self.halt_reason = "Process Started".to_string();
@@ -190,7 +223,10 @@ impl DebuggerState {
                         .memory = mem;
                 }
                 DebuggerMsg::ProcessDeath(pid, status) => {
-                    unimplemented!("Proc death");
+                    self.process_state
+                        .iter_mut()
+                        .find(|p| p.process == pid)
+                        .expect("No process to mark dead").alive = false;
                 }
             }
         }

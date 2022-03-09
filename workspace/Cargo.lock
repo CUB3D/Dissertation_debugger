@@ -477,6 +477,7 @@ dependencies = [
  "imgui",
  "imgui-filedialog",
  "imgui-glium-renderer",
+ "imgui-memory-editor",
  "imgui-winit-support",
 ]
 
@@ -894,6 +895,23 @@ checksum = "5af2c601e2bda3bdc6fd291c81f08c51bd04741f5ef2801d7e77324496cf12ce"
 dependencies = [
  "glium",
  "imgui",
+]
+
+[[package]]
+name = "imgui-memory-editor"
+version = "0.3.0"
+dependencies = [
+ "imgui",
+ "imgui-memory-editor-sys",
+]
+
+[[package]]
+name = "imgui-memory-editor-sys"
+version = "0.3.0"
+dependencies = [
+ "cc",
+ "cty",
+ "imgui-sys",
 ]
 
 [[package]]

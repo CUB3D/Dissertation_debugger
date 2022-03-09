@@ -31,7 +31,7 @@ pub struct DebuggerUi {
 impl Default for DebuggerUi {
     fn default() -> Self {
         Self {
-            fd: imgui_filedialog::FileDialog::create("Test"),
+            fd: imgui_filedialog::FileDialog::create("Open File"),
             mmap: Default::default(),
             mem: Default::default(),
             syscalls: Default::default(),
@@ -73,6 +73,8 @@ impl DebuggerUi {
                     ui.checkbox(menu.title(), menu.visible_mut());
                 }
             });
+            ui.text("Status: ");
+            ui.text(state.status.description());
         });
         if fd.display() {
             println!("Browsing folder {:?}", fd.current_path());
