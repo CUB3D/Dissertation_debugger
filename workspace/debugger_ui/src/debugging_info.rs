@@ -1,5 +1,5 @@
-use debugger_core::elf::Elf;
 use std::io::Cursor;
+use goblin::elf::Elf;
 
 /// A subprogram (function) as defined by DWARF
 #[derive(Clone, Debug)]
@@ -15,17 +15,21 @@ pub struct DebuggingInfo {
     pub subprograms: Vec<SubProgram>,
 }
 
-pub fn parse_dwarf_info(elf_parsed: &Elf) -> DebuggingInfo {
+pub fn parse_dwarf_info(bytes: &[u8], elf_parsed: &Elf) -> DebuggingInfo {
     let mut subprograms = vec![];
     let dwarf = gimli::read::Dwarf::load(
         |id: gimli::SectionId| -> Result<std::borrow::Cow<[u8]>, gimli::Error> {
-            if let Some(buf) = elf_parsed.by_name(id.name()) {
-                // println!("Loading {:?}", id.name());
-                return Ok(std::borrow::Cow::Owned(buf.data.clone()));
-            } else {
-                // println!("Cant find {:?}", id.name());
-                return Ok(std::borrow::Cow::Borrowed(&[][..]));
+            for s in &elf_parsed.section_headers {
+                if let Some(name) = elf_parsed.shdr_strtab.get_at(s.sh_name) {
+                    if name == id.name() {
+                        let mut data = vec![0u8; s.sh_size as usize];
+                        data.copy_from_slice(bytes.get(s.file_range().unwrap()).unwrap());
+                        return Ok(std::borrow::Cow::Owned(data));
+                    }
+                }
             }
+
+            return Ok(std::borrow::Cow::Borrowed(&[][..]));
         },
     );
 
@@ -77,17 +81,19 @@ pub fn parse_dwarf_info(elf_parsed: &Elf) -> DebuggingInfo {
                 match entry.tag() {
                     gimli::DW_TAG_subprogram => {
                         let name = {
-                            let name = attrs
+                            if let Some(name) = attrs
                                 .iter()
-                                .find(|a| a.name() == gimli::DW_AT_name)
-                                .expect("No name");
-                            let name_str = dwarf
-                                .attr_string(&unit, name.value())
-                                .expect("Failed to get name string");
-                            use gimli::Reader;
-                            let s = name_str.to_slice().expect("foobar");
-                            let s = String::from_utf8(s.to_vec());
-                            s.expect("String fail")
+                                .find(|a| a.name() == gimli::DW_AT_name) {
+                                let name_str = dwarf
+                                    .attr_string(&unit, name.value())
+                                    .expect("Failed to get name string");
+                                use gimli::Reader;
+                                let s = name_str.to_slice().expect("foobar");
+                                let s = String::from_utf8(s.to_vec());
+                                s.expect("String fail")
+                            } else {
+                                "".to_string()
+                            }
                         };
                         let start_addr = {
                             let pc =
@@ -111,7 +117,7 @@ pub fn parse_dwarf_info(elf_parsed: &Elf) -> DebuggingInfo {
         }
     }
 
-    if let Some(section) = elf_parsed.by_name(".rela.dyn") {
+    /*if let Some(section) = elf_parsed.by_name(".rela.dyn") {
         debugger_core::elf::parse_rela(&mut Cursor::new(section.data), &elf_parsed);
     }
 
@@ -126,7 +132,7 @@ pub fn parse_dwarf_info(elf_parsed: &Elf) -> DebuggingInfo {
                 });
             }
         }
-    }
+    }*/
 
     // println!("Found subroutines, {:?}", subprograms);
 

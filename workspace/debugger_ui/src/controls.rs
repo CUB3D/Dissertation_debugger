@@ -87,12 +87,12 @@ impl InnerRender for WidgetControls {
         ui.text(format!("Halt reason: {}", &state.halt_reason));
 
         if state.started {
-            if ui.checkbox("Auto step", &mut state.auto_stp) {
-                if state.auto_stp {
+            if ui.checkbox("Auto step", &mut state.auto_step) {
+                if state.auto_step {
                     self.send_continue(state);
                 }
             }
-            if !state.auto_stp {
+            if !state.auto_step {
                 if ui.small_button("Step") {
                     self.send_continue(state);
                 }

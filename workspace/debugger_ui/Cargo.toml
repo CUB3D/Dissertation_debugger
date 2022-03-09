@@ -19,5 +19,6 @@ clap = "2.34.0"
 gimli = "0.26.1"
 fallible-iterator = "0.2.0"
 crossbeam-channel = "0.5.1"
+goblin = "0.5.1"
 
 debugger_core = { path = "../debugger_core" }
