@@ -2,6 +2,7 @@ use crate::debugger_ui::widget::{InnerRender, UiMenu};
 use crate::{define_ui_menu, DebuggerState};
 use imgui::{Ui, Window};
 use debugger_core::Msg;
+use debugger_core::debugger_state::DebuggerStatus;
 
 pub struct WidgetControls {
     pub visible: bool,
@@ -49,31 +50,18 @@ impl InnerRender for WidgetControls {
             return;
         }
 
-        // Show start button only if a file is loaded
-        if state.elf.is_some() {
-            if state.process.is_some() {
-                // Restart button, only shown when a process is currently running
-                if ui.small_button("Restart") {
-                    state
-                        .sender
-                        .as_ref()
-                        .unwrap()
-                        .send(Msg::Restart)
-                        .expect("Failed to send msg");
-                }
-            
-            if ui.small_button("Continue") {
+        if state.status == DebuggerStatus::Running || state.status == DebuggerStatus::Dead {
+            // Restart button, only shown when a process is currently running
+            if ui.small_button("Restart") {
                 state
                     .sender
                     .as_ref()
                     .unwrap()
-                    .send(Msg::Start)
+                    .send(Msg::Restart)
                     .expect("Failed to send msg");
             }
-            }
         }
-
-        if state.process.is_some() {
+        if state.status == DebuggerStatus::Running {
             // Stop button, only shown when a process is currently running
             if ui.small_button("Stop") {
                 state
@@ -84,17 +72,30 @@ impl InnerRender for WidgetControls {
                     .expect("Failed to send msg");
                 state.started = false;
             }
+
         }
 
-        ui.text(format!("Halt reason: {}", &state.halt_reason));
+        //Continue button, only shown when paused on a breakpoint or waiting to start
+        if state.status == DebuggerStatus::ReadyToStart ||  state.status == DebuggerStatus::Breakpoint || state.status == DebuggerStatus::Paused {
+            if ui.small_button("Continue") {
+                state.send_msg(Msg::Start);
+            }
+
+            //TODO: this wont work if you click this first instead of continue
+            if ui.small_button("Single Step") {
+                state.send_msg(Msg::DoSingleStep);
+            }
+        }
+
+        //ui.text(format!("Halt reason: {}", &state.halt_reason));
 
         /*if state.started {
-            if ui.checkbox("Auto step", &mut state.auto_stp) {
-                if state.auto_stp {
+            if ui.checkbox("Auto step", &mut state.auto_step) {
+                if state.auto_step {
                     self.send_continue(state);
                 }
             }
-            if !state.auto_stp {
+            if !state.auto_step {
                 if ui.small_button("Step") {
                     self.send_continue(state);
                 }
