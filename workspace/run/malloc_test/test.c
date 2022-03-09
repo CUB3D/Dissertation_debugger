@@ -15,15 +15,16 @@ bool check_password(char* test1, char* test2) {
 int main() {
     char* test1 = "HelloWorld";
     char* test2 = malloc(100);;
+    fprintf(stderr, "Malloc returned %p\n", test2);
     
     for(int i =0; i < strlen(test1); i++) {
         test2[i] = test1[i];
     }
 
     if (check_password(test1, test2)) {
-        printf("Password correct\n");
+        fprintf(stderr, "Password correct\n");
     } else {
-        printf("Password incorrect\n");
+        fprintf(stderr, "Password incorrect\n");
     }
 
     return 0;
