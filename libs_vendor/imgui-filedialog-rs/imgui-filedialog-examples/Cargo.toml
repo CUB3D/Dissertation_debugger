@@ -1,0 +1,15 @@
+[package]
+name = "imgui-filedialog-examples"
+version = "0.1.0"
+authors = ["Ben Dickson"]
+edition = "2018"
+
+[dependencies]
+imgui-filedialog = { path = "../" }
+
+clipboard = "0.5"
+glium = { version = "0.30", default-features = true }
+image = "0.23"
+imgui = "0.8.0"
+imgui-glium-renderer = "0.8.0"
+imgui-winit-support = "0.8.0"
