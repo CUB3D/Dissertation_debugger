@@ -1,7 +1,6 @@
 use crate::{Process};
 
 /// Represent a single breakpoint
-#[cfg(feature = "breakpoints")]
 #[derive(Debug, Copy, Clone)]
 pub struct Breakpoint {
     /// The original value of the byte that this breakpoint replaced, None if the value is missing

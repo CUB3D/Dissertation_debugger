@@ -1,7 +1,5 @@
 //! Handling of processes
 
-use std::io::{Read, Seek, SeekFrom, Write};
-use linux_memory_map::get_memory_map;
 use crate::types::{FpRegs, UserRegs, WaitStatus};
 
 /// A process identifier (pid)
@@ -26,7 +24,9 @@ impl Process {
     }
 
     /// Read a null terminated string from the given address in the address space of this process
-    /// SAFTEY: This function will continue reading memory until either an error, or a null byte is reached
+    ///
+    /// # Safety
+    /// This function will continue reading memory until either an error, or a null byte is reached
     /// It is up to the caller to ensure that the given address points to a valid string in the address space of the target
     /// also see 'ptrace_read_string'
     pub unsafe fn read_string(&self, address: i64) -> String {
@@ -103,8 +103,8 @@ impl Process {
 
     /// Read a u64 from the given address in the process address space
     pub fn ptrace_peektext(&self, addr: usize) -> u64 {
-        let val = unsafe { libc::ptrace(libc::PTRACE_PEEKTEXT, self.0, addr, 0) } as u64;
-        return val;
+        let val = unsafe { libc::ptrace(libc::PTRACE_PEEKTEXT, self.0, addr, 0) };
+        val as u64
     }
 
     /// Send a sigstop to the process

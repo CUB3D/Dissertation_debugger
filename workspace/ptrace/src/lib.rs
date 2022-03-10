@@ -4,7 +4,7 @@
 pub use linux_ptrace::*;
 #[cfg(target_os = "linux")]
 pub mod process;
-#[cfg(target_os = "linux")]
+#[cfg(all(target_os = "linux", feature="breakpoints"))]
 pub mod breakpoint;
 #[cfg(target_os = "linux")]
 pub mod types;
@@ -13,7 +13,7 @@ pub mod types;
 pub use process::*;
 #[cfg(target_os = "linux")]
 pub use types::*;
-#[cfg(target_os = "linux")]
+#[cfg(all(target_os = "linux", feature="breakpoints"))]
 pub use breakpoint::*;
 #[cfg(target_os = "linux")]
 pub use linux_memory_map::*;
@@ -23,13 +23,6 @@ mod linux_ptrace {
     use crate::process::Process;
     use std::ffi::CString;
     use std::error::Error;
-    use std::collections::BTreeMap;
-    use std::ops::{Range};
-    use std::fmt::Debug;
-    #[cfg(feature = "child_processes")]
-    use std::ops::Deref;
-    use crate::breakpoint::Breakpoint;
-    use crate::types::{FpRegs, UserRegs};
 
     /// Read a null-terminated (cstring) from the process `child` at address `addr`,
     /// # Safety
@@ -80,7 +73,7 @@ mod linux_ptrace {
             let child_proc = Process(child);
 
             if child == 0 {
-                let child_pid = unsafe { libc::getpid() };
+                let _child_pid = unsafe { libc::getpid() };
                 // Mark the child for tracing
                 Process::ptrace_traceme();
 
@@ -99,7 +92,7 @@ mod linux_ptrace {
 
             unsafe { libc::ptrace(libc::PTRACE_SETOPTIONS, child, 0, libc::PTRACE_O_EXITKILL | libc::PTRACE_O_TRACESYSGOOD | libc::PTRACE_O_TRACECLONE | libc::PTRACE_O_TRACEEXEC | libc::PTRACE_O_TRACEFORK | libc::PTRACE_O_TRACEVFORK | libc::PTRACE_O_TRACEEXIT) };
 
-            return child_proc;
+            child_proc
         }
     }
 }

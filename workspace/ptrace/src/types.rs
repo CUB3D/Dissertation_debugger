@@ -1,5 +1,3 @@
-use std::ops::Range;
-
 /// Translated to rust from <arch/x86/include/asm/user_64.h>
 #[derive(Default, Copy, Clone, Debug, Eq, PartialEq)]
 #[repr(C)]
