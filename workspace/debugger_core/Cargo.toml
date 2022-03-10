@@ -9,8 +9,7 @@ edition = "2021"
 libc = "0.2.108"
 crossbeam-channel = "0.5.1"
 exe = "0.4.5"
-fat-macho = "0.4.4"
-goblin = "0.4.3"
+goblin = { version = "0.5.1", default-features=false, features=["endian_fd", "elf32", "elf64", "std"]}
 
 [target.'cfg(target_os = "linux")'.dependencies]
 ptrace = { path = "../ptrace", features = ["breakpoints", "child_processes"]}
