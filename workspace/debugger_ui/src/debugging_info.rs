@@ -79,6 +79,14 @@ pub fn parse_dwarf_info(bytes: &[u8], elf_parsed: &Elf) -> DebuggingInfo {
                     .collect::<Vec<_>>();
 
                 match entry.tag() {
+                    gimli::DW_TAG_variable => {
+                        let attrs = attrs;
+
+                        for attr in attrs {
+                            println!("Got variable {:?} - {:?}", attr.name().static_string(), attr.value().exprloc_value());
+                        }
+                    }
+
                     gimli::DW_TAG_subprogram => {
                         let name = {
                             if let Some(name) = attrs
