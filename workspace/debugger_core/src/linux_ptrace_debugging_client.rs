@@ -428,6 +428,11 @@ impl DebuggingClient for LinuxPtraceDebuggingClient {
                                 println!("Got ptrace evt: {:?}", evt);
                                 match evt {
                                     PtraceEvent::SyscallEnter => {
+                                        // If we can get a call stack, forward that to the ui
+                                        if let Ok(call_stack) = debugger.get_call_stack(pid) {
+                                            send_from_debug.send(DebuggerMsg::CallStack(pid, call_stack));
+                                        }
+
                                         let mut user_regs = pid.ptrace_getregs();
                                         // Figure out the details of the syscall
                                         let syscall_desc =
@@ -448,6 +453,11 @@ impl DebuggingClient for LinuxPtraceDebuggingClient {
                                         continue 'big_exit;
                                     }
                                     PtraceEvent::Exit(exit_status) => {
+                                        // If we can get a call stack, forward that to the ui
+                                        if let Ok(call_stack) = debugger.get_call_stack(pid) {
+                                            send_from_debug.send(DebuggerMsg::CallStack(pid, call_stack));
+                                        }
+
                                         // Try and send regs
                                         let mut user_regs = pid.ptrace_getregs();
                                         let fp_regs = pid.ptrace_getfpregs();

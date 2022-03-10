@@ -10,6 +10,7 @@ libc = "0.2.108"
 crossbeam-channel = "0.5.1"
 exe = "0.4.5"
 goblin = { version = "0.5.1", default-features=false, features=["endian_fd", "elf32", "elf64", "std"]}
+linux_memory_map = { path = "../linux_memory_map" }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 ptrace = { path = "../ptrace", features = ["breakpoints", "child_processes"]}

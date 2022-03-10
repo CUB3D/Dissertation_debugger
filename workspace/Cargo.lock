@@ -493,6 +493,7 @@ dependencies = [
  "exe",
  "goblin",
  "libc",
+ "linux_memory_map",
  "mach",
  "ptrace",
  "unwind",
@@ -1091,6 +1092,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "linux_memory_map"
+version = "0.1.0"
+
+[[package]]
 name = "lock_api"
 version = "0.4.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1573,6 +1578,7 @@ name = "ptrace"
 version = "0.1.0"
 dependencies = [
  "libc",
+ "linux_memory_map",
 ]
 
 [[package]]

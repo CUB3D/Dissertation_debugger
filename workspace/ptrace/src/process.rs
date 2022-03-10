@@ -1,8 +1,8 @@
 //! Handling of processes
 
-use crate::UserRegs;
-use crate::FpRegs;
-use crate::WaitStatus;
+use std::io::{Read, Seek, SeekFrom, Write};
+use linux_memory_map::get_memory_map;
+use crate::types::{FpRegs, UserRegs, WaitStatus};
 
 /// A process identifier (pid)
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
@@ -91,6 +91,11 @@ impl Process {
         assert_ne!(-1, unsafe { libc::ptrace(libc::PTRACE_SETREGS, self.0, 0, regs.as_ref() as *const _)});
     }
 
+    /// Set the fp regs of the process
+    pub fn ptrace_setfpregs(&mut self, regs: Box<FpRegs>) {
+        assert_ne!(-1, unsafe { libc::ptrace(libc::PTRACE_SETFPREGS, self.0, 0, regs.as_ref() as *const _)});
+    }
+
     /// Get the original value of rax, this will contain the id of the syscall being executed on linux when a syscall trap event is raised
     pub fn ptrace_getreg_origrax(&self) -> i64 {
         unsafe { libc::ptrace(libc::PTRACE_PEEKUSER, self.0, 8*libc::ORIG_RAX, 0)}
@@ -105,5 +110,62 @@ impl Process {
     /// Send a sigstop to the process
     pub fn sigstop(&self) {
         unsafe { libc::kill(self.0, libc::SIGSTOP) };
+    }
+
+    #[cfg(feature = "snapshots")]
+    /// Take a snapshot of the given process, snapshots include the full register (integer, fp) state + stack state
+    fn snapshot(&mut self) -> Snapshot {
+        // Create a fresh memory map
+        let map = get_memory_map(self.0).unwrap();
+
+        println!("Creating snapshot");
+
+        let mut regs = self.ptrace_getregs();
+        let mut fpregs = self.ptrace_getfpregs();
+
+        println!("[snapshot] memory");
+
+        let mut memory = Vec::new();
+        for ent in &map.0 {
+            // No point saving read-only memory
+            if !ent.permissions.write {
+                continue;
+            }
+            println!("Backing up mem section: {}", ent.path);
+            let mut mem_file = std::fs::File::open(format!("/proc/{}/mem", self.0)).expect("No mem?");
+            let mut mem = vec![0u8; ent.range.end - ent.range.start];
+            mem_file.seek(SeekFrom::Start(ent.range.start as u64)).expect("Seek failed");
+            //TODO:
+            let _ = mem_file.read_exact(&mut mem);//.expect("Failed to read memory range");
+
+            memory.push((mem, ent.range.clone(), ent.path.clone()));
+        }
+
+        Snapshot {
+            regs,
+            fpregs,
+            memory
+        }
+    }
+
+    #[cfg(feature = "snapshots")]
+    fn snapshot_restore(&mut self, snp: Snapshot) {
+        println!("Restoring");
+
+
+        println!("Restoring memory");
+        for (data, src_range, path) in snp.memory {
+            println!("Restoring: {}", path);
+            let mut mem_file = std::fs::OpenOptions::new().write(true).open(format!("/proc/{}/mem", self.0)).expect("No mem?");
+            mem_file.seek(SeekFrom::Start(src_range.start as u64)).expect("Seek failed");
+            //TODO:
+            let _ = mem_file.write_all(&data);//.expect("Failed to write memory range");
+        }
+
+        // Restore the saved registers
+        self.ptrace_setregs(snp.regs);
+        self.ptrace_setfpregs(snp.fpregs);
+
+        println!("Continuing");
     }
 }
