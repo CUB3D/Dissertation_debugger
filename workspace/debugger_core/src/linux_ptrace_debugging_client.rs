@@ -458,6 +458,17 @@ impl DebuggingClient for LinuxPtraceDebuggingClient {
                                             send_from_debug.send(DebuggerMsg::CallStack(pid, call_stack));
                                         }
 
+                                        // If we can get a memory map for the process
+                                        if let Some(mmap) = LinuxPtraceDebuggingClient::get_memory_map(pid)
+                                        {
+                                            send_from_debug.send(DebuggerMsg::MemoryMap(pid, mmap));
+                                        }
+
+                                        // Try and send memory state
+                                        let memory = LinuxPtraceDebuggingClient::get_memory(pid);
+                                        send_from_debug
+                                            .send(DebuggerMsg::Memory(pid, memory));
+
                                         // Try and send regs
                                         let mut user_regs = pid.ptrace_getregs();
                                         let fp_regs = pid.ptrace_getfpregs();
@@ -515,6 +526,11 @@ impl DebuggingClient for LinuxPtraceDebuggingClient {
                                             send_from_debug.send(DebuggerMsg::MemoryMap(pid, mmap));
                                         }
 
+                                        // Try and send memory state
+                                        let memory = LinuxPtraceDebuggingClient::get_memory(pid);
+                                        send_from_debug
+                                            .send(DebuggerMsg::Memory(pid, memory));
+
                                         // Try and send regs
                                         let mut user_regs = pid.ptrace_getregs();
                                         let fp_regs = pid.ptrace_getfpregs();
@@ -527,11 +543,6 @@ impl DebuggingClient for LinuxPtraceDebuggingClient {
                                         .send(DebuggerMsg::UserRegisters(pid, user_regs_ui.clone()));
                                         send_from_debug
                                         .send(DebuggerMsg::FpRegisters(pid, fp_regs.clone()));
-                                        
-                                        // Try and send memory state
-                                        let memory = LinuxPtraceDebuggingClient::get_memory(pid);
-                                        send_from_debug
-                                            .send(DebuggerMsg::Memory(pid, memory));
 
                                         send_from_debug
                                             .send(DebuggerMsg::Trap)
