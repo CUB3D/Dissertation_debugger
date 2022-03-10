@@ -1,22 +1,21 @@
 #[cfg(target_os = "windows")]
-use crate::{Breakpoint, Process, FpRegs};
+use crate::{Breakpoint, FpRegs, Process};
 #[cfg(target_os = "macos")]
-use crate::{Breakpoint, Process, FpRegs};
+use crate::{Breakpoint, FpRegs, Process};
 use crossbeam_channel::{Receiver, Sender};
 
 #[cfg(target_os = "linux")]
-use ptrace::{Breakpoint, Process, FpRegs};
-use std::io::Cursor;
+use ptrace::{Breakpoint, FpRegs, Process};
 use std::ops::Range;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use crate::common_binary_file::BinaryFile;
 use crate::{DebuggerMsg, DebuggingClient, Msg, NativeDebuggingClient};
 
-use crate::MemoryMap;
-use crate::UserRegs;
 use crate::CallStack;
+use crate::MemoryMap;
 use crate::Syscall;
+use crate::UserRegs;
 
 //TODO: ideas
 // have some way of saying that we don't care about some state so that the client wont bother sending it e.g memory maps
@@ -78,17 +77,16 @@ impl Default for DebuggerStatus {
 }
 impl DebuggerStatus {
     pub fn description(&self) -> String {
-       match self {
-           Self::NoBinaryYet => format!("Load a binary to start"),
-           Self::ReadyToStart => format!("Ready to start"),
-           Self::Running => format!("Running"),
-           Self::Breakpoint => format!("Breakpoint"),
-           Self::Paused => format!("Paused"),
-           Self::Dead => format!("Dead"),
-       }
+        match self {
+            Self::NoBinaryYet => format!("Load a binary to start"),
+            Self::ReadyToStart => format!("Ready to start"),
+            Self::Running => format!("Running"),
+            Self::Breakpoint => format!("Breakpoint"),
+            Self::Paused => format!("Paused"),
+            Self::Dead => format!("Dead"),
+        }
     }
 }
-
 
 #[derive(Default)]
 pub struct DebuggerState {
@@ -118,30 +116,33 @@ impl DebuggerState {
         // if let Ok(fr) = fat_macho::FatReader::new(&binary_content) {
         //     self.elf = Some(BinaryFile::MachO);
         // } else {
-            if let Ok(gelf) = goblin::elf::Elf::parse(&binary_content) {
-                if let Some(malloc) = gelf.syms.iter().find(|a| gelf.strtab.get_at(a.st_name).unwrap() == "malloc@plt").map(|m| m.st_value as usize) {
-                    println!("malloc = {}", malloc);
-                } else {
-                    println!("No malloc");
-                }
-                //TODO: symbols ui + breakpoints on symbol adding
-                // When break on malloc/free track the ptrs
+        if let Ok(gelf) = goblin::elf::Elf::parse(&binary_content) {
+            if let Some(malloc) = gelf
+                .syms
+                .iter()
+                .find(|a| gelf.strtab.get_at(a.st_name).unwrap() == "malloc@plt")
+                .map(|m| m.st_value as usize)
+            {
+                println!("malloc = {}", malloc);
+            } else {
+                println!("No malloc");
+            }
+            //TODO: symbols ui + breakpoints on symbol adding
+            // When break on malloc/free track the ptrs
 
-                let elf = Box::new(gelf);
-
-                self.elf = Some(BinaryFile::Elf(binary_content));
-            } //else {
-            //     if let Ok(pe) = exe::PEImage::from_disk_file(binary) {
-            //         self.elf = Some(BinaryFile::PE(pe));
-            //     }
-            // }
-        // }
+            self.elf = Some(BinaryFile::Elf(binary_content));
+        } //else {
+          //     if let Ok(pe) = exe::PEImage::from_disk_file(binary) {
+          //         self.elf = Some(BinaryFile::PE(pe));
+          //     }
+          // }
+          // }
 
         self.client = Some(NativeDebuggingClient::default());
         let (sender, reciever) = self.client.as_mut().unwrap().start(&binary, &[]);
         self.sender = Some(sender);
         self.reciever = Some(reciever);
-        
+
         self.status = DebuggerStatus::ReadyToStart;
         self.started = true;
     }
@@ -162,7 +163,6 @@ impl DebuggerState {
                     self.halt_reason = "Syscall Trap".to_string();
                     self.sender.as_ref().unwrap().send(Msg::Continue);
                     self.sender.as_ref().unwrap().send(Msg::Continue);
-
 
                     /*if self.auto_step {
                         //TODO: shouldnt have to do this, not handling syscall enter/exit properly
@@ -209,7 +209,8 @@ impl DebuggerState {
                         .iter_mut()
                         .find(|p| p.process == pid)
                         .expect("No process to set mmap for")
-                        .syscall_list.push(s);
+                        .syscall_list
+                        .push(s);
                 }
                 DebuggerMsg::MemoryMap(pid, mmap) => {
                     self.process_state
@@ -244,7 +245,8 @@ impl DebuggerState {
                     self.process_state
                         .iter_mut()
                         .find(|p| p.process == pid)
-                        .expect("No process to mark dead").alive = false;
+                        .expect("No process to mark dead")
+                        .alive = false;
 
                     self.halt_reason = format!("Process died, pid = {}", pid.0);
 
