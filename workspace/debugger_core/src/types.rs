@@ -1,33 +1,5 @@
 use core::ops::Range;
-
-#[derive(Debug, Clone)]
-pub struct MemoryMap(pub Vec<MemoryMapEntry>);
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
-pub enum MemoryMapEntryPermissionsKind {
-    Private,
-    Shared,
-}
-impl core::fmt::Display for MemoryMapEntryPermissionsKind {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        match self {
-            Self::Private => write!(f, "private"),
-            Self::Shared => write!(f, "shared"),
-        }
-    }
-}
-#[derive(Copy, Clone, Debug)]
-pub struct MemoryMapEntryPermissions {
-    pub read: bool,
-    pub write: bool,
-    pub execute: bool,
-    pub kind: MemoryMapEntryPermissionsKind,
-}
-#[derive(Clone, Debug)]
-pub struct MemoryMapEntry {
-    pub range: Range<usize>,
-    pub permissions: MemoryMapEntryPermissions,
-    pub path: String,
-}
+pub use linux_memory_map::*;
 
 /// Translated to rust from <arch/x86/include/asm/user_64.h>
 #[derive(Default, Copy, Clone, Debug, Eq, PartialEq)]

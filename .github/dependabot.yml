@@ -8,4 +8,12 @@ updates:
   directory: "/workspace/ptrace"
   schedule:
     interval: daily
+- package-ecosystem: cargo
+  directory: "/workspace/debugger_ui"
+  schedule:
+    interval: daily
+- package-ecosystem: cargo
+  directory: "/workspace"
+  schedule:
+    interval: daily
   open-pull-requests-limit: 10

@@ -8,7 +8,7 @@ use crossbeam_channel::{Receiver, Sender};
 use ptrace::{Breakpoint, Process, FpRegs};
 use std::io::Cursor;
 use std::ops::Range;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use crate::common_binary_file::BinaryFile;
 use crate::{DebuggerMsg, DebuggingClient, Msg, NativeDebuggingClient};
@@ -147,7 +147,7 @@ impl DebuggerState {
     }
 
     pub fn process_incoming_message(&mut self) {
-        if let Ok(msg) = self
+        while let Ok(msg) = self
             .reciever
             .as_ref()
             .unwrap()
