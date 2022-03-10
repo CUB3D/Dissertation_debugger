@@ -1,4 +1,3 @@
-use core::ops::Range;
 pub use linux_memory_map::*;
 
 /// Translated to rust from <arch/x86/include/asm/user_64.h>

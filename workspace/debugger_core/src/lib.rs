@@ -1,15 +1,15 @@
 //! A client for debugging a given process, handles process spawning and event handling for a given platform
 #![feature(seek_stream_len)]
 #![feature(new_uninit)]
-pub mod types;
-pub mod debugger_state;
 pub mod common_binary_file;
+pub mod debugger_state;
+pub mod types;
 // pub mod elf;
-pub use types::*;
 pub use debugger_state::*;
+pub use types::*;
 // pub use elf::*;
-use std::ops::Range;
 use crossbeam_channel::{Receiver, Sender};
+use std::ops::Range;
 
 pub trait DebuggingClient {
     //TODO: should this return an instance of the client
@@ -18,24 +18,24 @@ pub trait DebuggingClient {
 #[cfg(target_os = "linux")]
 pub use ptrace::{Breakpoint, FpRegs, Process};
 
-use crate::types::MemoryMap;
-use crate::types::UserRegs;
 use crate::types::CallStack;
+use crate::types::MemoryMap;
 use crate::types::Syscall;
+use crate::types::UserRegs;
 
 #[cfg(target_os = "linux")]
 pub mod linux_ptrace_debugging_client;
-#[cfg(target_os = "windows")]
-pub mod windows_debugging_client;
 #[cfg(target_os = "macos")]
 pub mod mac_debugging_client;
+#[cfg(target_os = "windows")]
+pub mod windows_debugging_client;
 
 #[cfg(target_os = "linux")]
 pub use linux_ptrace_debugging_client::LinuxPtraceDebuggingClient as NativeDebuggingClient;
-#[cfg(target_os = "windows")]
-pub use windows_debugging_client::WindowsNTDebuggingClient as NativeDebuggingClient;
 #[cfg(target_os = "macos")]
 pub use mac_debugging_client::DarwinDebuggingClient as NativeDebuggingClient;
+#[cfg(target_os = "windows")]
+pub use windows_debugging_client::WindowsNTDebuggingClient as NativeDebuggingClient;
 
 #[cfg(not(target_os = "linux"))]
 #[derive(Copy, Clone, Debug)]
@@ -80,7 +80,7 @@ pub enum Msg {
     /// Restart the running process
     Restart,
     /// Stop the process
-    Stop
+    Stop,
 }
 
 /// Messages send from the debugging client to the ui to notify of an event

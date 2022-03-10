@@ -1,11 +1,11 @@
-use crate::{DebuggingClient, FpRegs, Process};
+use crate::types::UserRegs;
 use crate::types::{
     MemoryMap, MemoryMapEntry, MemoryMapEntryPermissions, MemoryMapEntryPermissionsKind,
 };
-use crate::types::UserRegs;
 use crate::{DebuggerMsg, DebuggerState, Msg};
+use crate::{DebuggingClient, FpRegs, Process};
 use core::default::Default;
-use crossbeam_channel::{Receiver, Sender, unbounded};
+use crossbeam_channel::{unbounded, Receiver, Sender};
 use std::ffi::CString;
 use windows::Win32::Foundation;
 use windows::Win32::Foundation::{HANDLE, HANDLE_FLAGS, PSTR};
@@ -16,14 +16,17 @@ pub struct WindowsNTDebuggingClient {}
 impl WindowsNTDebuggingClient {
     fn get_context(pid: u32) -> (Box<UserRegs>, Box<FpRegs>) {
         let handle = unsafe {
-            ::windows::Win32::System::Threading::OpenThread(::windows::Win32::System::Threading::THREAD_GET_CONTEXT, false, pid)
+            ::windows::Win32::System::Threading::OpenThread(
+                ::windows::Win32::System::Threading::THREAD_GET_CONTEXT,
+                false,
+                pid,
+            )
         };
 
         let ctx = unsafe {
-            let mut ctx = Box::<
-                ::windows::Win32::System::Diagnostics::Debug::CONTEXT,
-            >::new_zeroed()
-                .assume_init();
+            let mut ctx =
+                Box::<::windows::Win32::System::Diagnostics::Debug::CONTEXT>::new_zeroed()
+                    .assume_init();
             ctx.ContextFlags = 0x00010000
                 | 0x00000001
                 | 0x00000002
@@ -32,7 +35,10 @@ impl WindowsNTDebuggingClient {
                 | 0x00000010
                 | 0x00000020
                 | 0x00000040;
-            let r = ::windows::Win32::System::Diagnostics::Debug::GetThreadContext(handle, ctx.as_mut());
+            let r = ::windows::Win32::System::Diagnostics::Debug::GetThreadContext(
+                handle,
+                ctx.as_mut(),
+            );
             assert_eq!(r.as_bool(), true, "Get thread context");
             println!("TC: {}, {} {} {}", r.0, ctx.Rax, ctx.Rbx, ctx.Rip);
             ctx
@@ -71,21 +77,27 @@ impl WindowsNTDebuggingClient {
         let mut fp_regs = unsafe { Box::<FpRegs>::new_zeroed().assume_init() };
 
         // Extract 80 bit x87 FPU registers
-        for (index, reg) in unsafe { ctx.Anonymous.FltSave.FloatRegisters }.iter().enumerate() {
-            fp_regs.st_space[index*4] = ((reg.High >> 32) & 0xFFFF_FFFF) as u32;
-            fp_regs.st_space[index*4 + 1] = (reg.High & 0xFFFF_FFFF) as u32;
-            fp_regs.st_space[index*4 + 2] = ((reg.Low >> 32) & 0xFFFF_FFFF) as u32;
-            fp_regs.st_space[index*4 + 3] = (reg.Low & 0xFFFF_FFFF) as u32;
+        for (index, reg) in unsafe { ctx.Anonymous.FltSave.FloatRegisters }
+            .iter()
+            .enumerate()
+        {
+            fp_regs.st_space[index * 4] = ((reg.High >> 32) & 0xFFFF_FFFF) as u32;
+            fp_regs.st_space[index * 4 + 1] = (reg.High & 0xFFFF_FFFF) as u32;
+            fp_regs.st_space[index * 4 + 2] = ((reg.Low >> 32) & 0xFFFF_FFFF) as u32;
+            fp_regs.st_space[index * 4 + 3] = (reg.Low & 0xFFFF_FFFF) as u32;
         }
 
         fp_regs.ftw = unsafe { ctx.Anonymous.FltSave.TagWord } as u16;
 
         // Extract 128 bit x/ymm regs into 32 bit chunks to match ptrace format
-        for (index, reg) in unsafe { ctx.Anonymous.FltSave.XmmRegisters }.iter().enumerate() {
-            fp_regs.xmm_space[index*4] = ((reg.High >> 32) & 0xFFFF_FFFF) as u32;
-            fp_regs.xmm_space[index*4 + 1] = (reg.High & 0xFFFF_FFFF) as u32;
-            fp_regs.xmm_space[index*4 + 2] = ((reg.Low >> 32) & 0xFFFF_FFFF) as u32;
-            fp_regs.xmm_space[index*4 + 3] = (reg.Low & 0xFFFF_FFFF) as u32;
+        for (index, reg) in unsafe { ctx.Anonymous.FltSave.XmmRegisters }
+            .iter()
+            .enumerate()
+        {
+            fp_regs.xmm_space[index * 4] = ((reg.High >> 32) & 0xFFFF_FFFF) as u32;
+            fp_regs.xmm_space[index * 4 + 1] = (reg.High & 0xFFFF_FFFF) as u32;
+            fp_regs.xmm_space[index * 4 + 2] = ((reg.Low >> 32) & 0xFFFF_FFFF) as u32;
+            fp_regs.xmm_space[index * 4 + 3] = (reg.Low & 0xFFFF_FFFF) as u32;
         }
 
         (user_regs, fp_regs)
@@ -107,8 +119,9 @@ impl DebuggingClient for WindowsNTDebuggingClient {
             match msg {
                 Msg::Start => {
                     let pi = unsafe {
-                        let mut si = Box::<::windows::Win32::System::Threading::STARTUPINFOA>::new_zeroed()
-                            .assume_init();
+                        let mut si =
+                            Box::<::windows::Win32::System::Threading::STARTUPINFOA>::new_zeroed()
+                                .assume_init();
                         let mut pi = Box::<
                             ::windows::Win32::System::Threading::PROCESS_INFORMATION,
                         >::new_zeroed()
@@ -140,10 +153,9 @@ impl DebuggingClient for WindowsNTDebuggingClient {
                     // }
 
                     unsafe {
-                        let r =
-                            ::windows::Win32::System::Diagnostics::Debug::DebugActiveProcess(
-                                pi.dwProcessId,
-                            );
+                        let r = ::windows::Win32::System::Diagnostics::Debug::DebugActiveProcess(
+                            pi.dwProcessId,
+                        );
                         // assert_eq!(r.as_bool(), true, "Debugger attached");
                     }
 
@@ -159,13 +171,12 @@ impl DebuggingClient for WindowsNTDebuggingClient {
                             let mut evt = Box::<
                                 ::windows::Win32::System::Diagnostics::Debug::DEBUG_EVENT,
                             >::new_zeroed()
-                                .assume_init();
+                            .assume_init();
                             evt.dwProcessId = pi.dwProcessId;
-                            let r =
-                                ::windows::Win32::System::Diagnostics::Debug::WaitForDebugEvent(
-                                    evt.as_mut(),
-                                    0,
-                                );
+                            let r = ::windows::Win32::System::Diagnostics::Debug::WaitForDebugEvent(
+                                evt.as_mut(),
+                                0,
+                            );
                             // assert_eq!(r.as_bool(), true, "Debug event recieved");
                             evt
                         };
@@ -173,7 +184,12 @@ impl DebuggingClient for WindowsNTDebuggingClient {
                             println!("Got debug event {}", evt.dwDebugEventCode);
 
                             let handle = unsafe {
-                                ::windows::Win32::System::Threading::OpenProcess(::windows::Win32::System::Threading::PROCESS_QUERY_INFORMATION | ::windows::Win32::System::Threading::THREAD_GET_CONTEXT, false, pi.dwProcessId)
+                                ::windows::Win32::System::Threading::OpenProcess(
+                                    ::windows::Win32::System::Threading::PROCESS_QUERY_INFORMATION
+                                        | ::windows::Win32::System::Threading::THREAD_GET_CONTEXT,
+                                    false,
+                                    pi.dwProcessId,
+                                )
                             };
 
                             // Read memory map
@@ -181,7 +197,11 @@ impl DebuggingClient for WindowsNTDebuggingClient {
                             unsafe {
                                 let mut base = core::ptr::null_mut();
                                 loop {
-                                    let mut mbi = Box::<::windows::Win32::System::Memory::MEMORY_BASIC_INFORMATION>::new_zeroed().assume_init();
+                                    let mut mbi = Box::<
+                                        ::windows::Win32::System::Memory::MEMORY_BASIC_INFORMATION,
+                                    >::new_zeroed(
+                                    )
+                                    .assume_init();
                                     let bytes_read = ::windows::Win32::System::Memory::VirtualQueryEx(handle, base, mbi.as_mut(), core::mem::size_of::<::windows::Win32::System::Memory::MEMORY_BASIC_INFORMATION>());
                                     if bytes_read == 0 {
                                         break;
@@ -189,8 +209,7 @@ impl DebuggingClient for WindowsNTDebuggingClient {
                                     // println!("Base addr = {:X}", mbi.BaseAddress as usize);
                                     // println!("bytes read = {}", bytes_read);
                                     // println!("{}", mbi.Protect);
-                                    base =
-                                        (mbi.BaseAddress as usize + mbi.RegionSize) as *mut _;
+                                    base = (mbi.BaseAddress as usize + mbi.RegionSize) as *mut _;
 
                                     let (r, w, e) = match mbi.Protect {
                                         ::windows::Win32::System::Memory::PAGE_EXECUTE => (false, false, true),
@@ -223,11 +242,21 @@ impl DebuggingClient for WindowsNTDebuggingClient {
                                     })
                                 }
                             }
-                            send_from_debug.send(DebuggerMsg::MemoryMap(Process(pi.dwProcessId as i32), MemoryMap(mmap)));
+                            send_from_debug.send(DebuggerMsg::MemoryMap(
+                                Process(pi.dwProcessId as i32),
+                                MemoryMap(mmap),
+                            ));
 
-                            let (user_regs, fp_regs) = WindowsNTDebuggingClient::get_context(pi.dwThreadId);
-                            send_from_debug.send(DebuggerMsg::UserRegisters(Process(pi.dwProcessId as i32), user_regs));
-                            send_from_debug.send(DebuggerMsg::FpRegisters(Process(pi.dwProcessId as i32), fp_regs));
+                            let (user_regs, fp_regs) =
+                                WindowsNTDebuggingClient::get_context(pi.dwThreadId);
+                            send_from_debug.send(DebuggerMsg::UserRegisters(
+                                Process(pi.dwProcessId as i32),
+                                user_regs,
+                            ));
+                            send_from_debug.send(DebuggerMsg::FpRegisters(
+                                Process(pi.dwProcessId as i32),
+                                fp_regs,
+                            ));
 
                             match evt.dwDebugEventCode {
                                 ::windows::Win32::System::Diagnostics::Debug::EXCEPTION_DEBUG_EVENT => {
@@ -269,14 +298,17 @@ impl DebuggingClient for WindowsNTDebuggingClient {
                                 local_debugger_state.apply_state_transform(msg.clone());
                                 match msg {
                                     Msg::Continue => break,
-                                    _ => panic!("Unexpected msg")
+                                    _ => panic!("Unexpected msg"),
                                 }
                             }
 
                             unsafe {
-                                ::windows::Win32::System::Diagnostics::Debug::ContinueDebugEvent(evt.dwProcessId, evt.dwThreadId, ::windows::Win32::Foundation::DBG_CONTINUE.0 as _);
+                                ::windows::Win32::System::Diagnostics::Debug::ContinueDebugEvent(
+                                    evt.dwProcessId,
+                                    evt.dwThreadId,
+                                    ::windows::Win32::Foundation::DBG_CONTINUE.0 as _,
+                                );
                             }
-
                         }
                     }
                 }
