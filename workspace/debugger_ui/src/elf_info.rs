@@ -19,5 +19,7 @@ impl InnerRender for WidgetElfInfo {
         } else {
             ui.text("No binary loaded");
         }
+
+        ui.text(format!("{}", std::process::id()));
     }
 }

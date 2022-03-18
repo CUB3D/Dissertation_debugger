@@ -44,7 +44,8 @@ impl EventDrivenPtraceDebugger {
     pub fn install_breakpoint(&mut self, bp: Breakpoint) {
         for child in &self.processes {
             let mut bp = bp.clone();
-            bp.install(*child);
+            // bp.install(*child);
+            // println!("After installing bp = {:?}", bp);
             let mut child_bps = self.breakpoints.get(child).unwrap_or(&Vec::new()).clone();
             child_bps.push(bp);
             self.breakpoints.insert(*child, child_bps);
@@ -97,6 +98,7 @@ impl EventDrivenPtraceDebugger {
                             })
                             .flatten()
                             .expect("Hit a breakpoint, but we can't find it to uninstall");
+                        println!("Before uninstall bp = {:?}", bp);
                         bp.uninstall(pid);
                         // Go back to the start of the original instruction so it actually gets executed
                         unsafe {

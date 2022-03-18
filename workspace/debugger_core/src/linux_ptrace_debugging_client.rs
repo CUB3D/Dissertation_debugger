@@ -340,11 +340,16 @@ impl DebuggingClient for LinuxPtraceDebuggingClient {
 
                 child.ptrace_syscall();
 
+                let mut breakpoints_pending_reinstall = Vec::new();
+
                 //TODO: other msgs
                 while let Some(msg) = state_messages.write().unwrap().pop() {
                     match msg {
                         Msg::AddBreakpoint(bp) => {
                             debugger.install_breakpoint(bp);
+                            for child in &debugger.processes {
+                                breakpoints_pending_reinstall.push((*child, bp.address));
+                            }
                         }
                         Msg::RemoveBreakpoint(addr) => {
                             debugger.remove_breakpoint(addr);
@@ -353,12 +358,10 @@ impl DebuggingClient for LinuxPtraceDebuggingClient {
                     }
                 }
 
-                let mut breakpoints_pending_reinstall = Vec::new();
-
                 'big_exit: loop {
                     //println!("Waiting for ptrace events");
                     let (pid, evt) = debugger.wait_for_event();
-                    println!("{:?} had an event", pid);
+                    // println!("{:?} had an event {:?}", pid, evt);
 
                     // Reinstall any pending breakpoints for this thread
                     for (index, (bp_pid, address)) in breakpoints_pending_reinstall.clone().iter().copied().enumerate() {
@@ -378,6 +381,7 @@ impl DebuggingClient for LinuxPtraceDebuggingClient {
                                 "Attempt to install breakpoint that has not been added",
                             );
                         bp.install(bp_pid);
+                        println!("After installing bp = {:?}", bp);
                         breakpoints_pending_reinstall.remove(index);
                     }
 
@@ -388,6 +392,9 @@ impl DebuggingClient for LinuxPtraceDebuggingClient {
                         match msg {
                             Msg::AddBreakpoint(bp) => {
                                 debugger.install_breakpoint(bp);
+                                for child in &debugger.processes {
+                                    breakpoints_pending_reinstall.push((*child, bp.address));
+                                }
                             }
                             Msg::RemoveBreakpoint(addr) => {
                                 debugger.remove_breakpoint(addr);
@@ -615,6 +622,9 @@ impl DebuggingClient for LinuxPtraceDebuggingClient {
                         match msg {
                             Msg::AddBreakpoint(bp) => {
                                 debugger.install_breakpoint(bp);
+                                for child in &debugger.processes {
+                                    breakpoints_pending_reinstall.push((*child, bp.address));
+                                }
                             }
                             Msg::RemoveBreakpoint(addr) => {
                                 debugger.remove_breakpoint(addr);

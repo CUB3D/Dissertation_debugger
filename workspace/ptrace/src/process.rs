@@ -2,6 +2,10 @@
 
 use crate::types::{FpRegs, UserRegs, WaitStatus};
 
+enum PtraceError {
+    Unknown,
+}
+
 /// A process identifier (pid)
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
 pub struct Process(pub i32);
@@ -102,9 +106,20 @@ impl Process {
     }
 
     /// Read a u64 from the given address in the process address space
+    #[deprecated]
     pub fn ptrace_peektext(&self, addr: usize) -> u64 {
+        self.ptrace_peektext_safe(addr).expect("Failed to peektext")
+    }
+
+    /// Read a u64 from the given address in the process address space
+    pub fn ptrace_peektext_safe(&self, addr: usize) -> Option<u64> {
+        unsafe { *libc::__errno_location() = 0 };
         let val = unsafe { libc::ptrace(libc::PTRACE_PEEKTEXT, self.0, addr, 0) };
-        val as u64
+        if unsafe { *libc::__errno_location() != 0} {
+            None
+        } else {
+            Some(val as u64)
+        }
     }
 
     /// Send a sigstop to the process
