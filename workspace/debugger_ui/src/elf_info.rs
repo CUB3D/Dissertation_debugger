@@ -19,12 +19,5 @@ impl InnerRender for WidgetElfInfo {
         } else {
             ui.text("No binary loaded");
         }
-
-        ui.text("Process:");
-        if let Some(p) = state.process {
-            ui.text(format!("Process id: {}", p.0));
-        } else {
-            ui.text("Process not started");
-        }
     }
 }

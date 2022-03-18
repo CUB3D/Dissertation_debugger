@@ -83,7 +83,7 @@ pub fn parse_dwarf_info(bytes: &[u8], elf_parsed: &Elf) -> DebuggingInfo {
                         let attrs = attrs;
 
                         for attr in attrs {
-                            println!("Got variable {:?} - {:?}", attr.name().static_string(), attr.value().exprloc_value());
+                            // println!("Got variable {:?} - {:?}", attr.name().static_string(), attr.value().exprloc_value());
                         }
                     }
 

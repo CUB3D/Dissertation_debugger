@@ -120,19 +120,13 @@ impl InnerRender for WidgetDisassemble {
                                 ui.text(format!("<{}>: ", sub.name))
                             }
 
-                            let token = if let Some(Some(user_regs)) = &state.process_state.first().map(|p| p.cache_user_regs.as_ref()) {
-                                if instruction.ip() == user_regs.ip {
-                                    let token =
-                                        ui.push_style_color(StyleColor::Text, [0.0, 1.0, 0.0, 1.0]);
-                                    // ui.text_colored(
-                                    //     [0.0, 1.0, 0.0, 1.0],
-                                    //     im_str!("{:016X} {}", instruction.ip(), output),
-                                    // );
-                                    ui.set_scroll_here_y();
-                                    Some(token)
-                                } else {
-                                    None
-                                }
+                            // If one process ip points here
+                            let token = if state.process_state.iter().find(|p| {
+                                p.cache_user_regs.as_ref().map(|ur| ur.ip == instruction.ip()).unwrap_or(false)
+                            }).is_some() {
+                                let token =
+                                    ui.push_style_color(StyleColor::Text, [0.0, 1.0, 0.0, 1.0]);
+                                Some(token)
                             } else {
                                 None
                             };
@@ -155,6 +149,7 @@ impl InnerRender for WidgetDisassemble {
                                     .position(|bp| bp.address == instruction.ip() as usize)
                                 {
                                     state.breakpoints.remove(pos);
+                                    state.sender.as_ref().unwrap().send(Msg::RemoveBreakpoint(instruction.ip() as usize));
                                 } else {
                                     let bp = Breakpoint::new(instruction.ip() as usize);
                                     state.breakpoints.push(bp);
