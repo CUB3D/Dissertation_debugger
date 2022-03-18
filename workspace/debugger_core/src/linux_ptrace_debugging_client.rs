@@ -17,109 +17,7 @@ use crate::types::{MemoryMap, MemoryMapEntry, MemoryMapEntryPermissions};
 use crate::types::{Syscall, SyscallArg};
 use crate::DebuggerState;
 use unwind::{Accessors, AddressSpace, Byteorder, Cursor as StackCursor, PTraceState, RegNum};
-
-#[derive(Debug, Clone)]
-pub enum PtraceEvent {
-    BreakpointHit(Breakpoint),
-    SyscallEnter,
-    SyscallExit,
-    /// The process has exited with the given status
-    Exit(isize),
-    SpawnChild,
-    Trap,
-}
-
-pub struct EventDrivenPtraceDebugger {
-    pub debugger: Ptrace,
-    pub in_syscall: HashMap<Process, bool>,
-    pub local_debugger_state: DebuggerState,
-}
-impl EventDrivenPtraceDebugger {
-    pub fn new(binary: &str, proc_name: &str, arg: &str) -> Self {
-        Self {
-            debugger: Ptrace::new(binary, proc_name, &[arg]).expect("Failed to start debugger"),
-            in_syscall: Default::default(),
-            local_debugger_state: Default::default(),
-        }
-    }
-
-    pub fn start(&mut self) -> Process {
-        let child = self.debugger.inital_spawn_child();
-        //child.ptrace_singlestep();
-        child
-    }
-
-    pub fn wait_for_event(&mut self, events: &mut Vec<PtraceEvent>) -> Process {
-        let local_debugger_state = &mut self.local_debugger_state;
-        let in_syscall = &mut self.in_syscall;
-
-        let (pid, status) = Process::wait_any();
-
-        if status.wifstopped() {
-            // Handle the various trap types
-            let stopsig = status.wstopsig();
-            if stopsig == (libc::SIGTRAP | 0x80) {
-                if !in_syscall.get(&pid).unwrap_or(&false) {
-                    events.push(PtraceEvent::SyscallEnter);
-                    in_syscall.insert(pid, true);
-                } else {
-                    pid.ptrace_syscall();
-                    in_syscall.insert(pid, false);
-                    events.push(PtraceEvent::SyscallExit);
-                    return pid;
-                }
-            } else if stopsig == libc::SIGTRAP {
-                let event = status.0 >> 16;
-
-                if event == 0 {
-                    // We know we didnt hit a syscall but we might have hit a manual breakpoint, check if we hit a 0xcc
-                    let user_regs = pid.ptrace_getregs();
-                    if pid.ptrace_peektext(user_regs.ip as usize - 1) & 0xFF == 0xCC {
-                        let bp = local_debugger_state
-                            .breakpoints
-                            .iter_mut()
-                            .find(|bp| bp.address == user_regs.ip as usize - 1)
-                            .expect("Hit a breakpoint, but we can't find it to uninstall");
-                        bp.uninstall(pid);
-                        // Go back to the start of the original instruction so it actually gets executed
-                        unsafe {
-                            libc::ptrace(
-                                libc::PTRACE_POKEUSER,
-                                pid,
-                                8 * libc::RIP,
-                                user_regs.ip - 1,
-                            )
-                        };
-                        events.push(PtraceEvent::BreakpointHit(*bp));
-                    } else {
-                        events.push(PtraceEvent::Trap);
-                    }
-                } else {
-                    match event {
-                        libc::PTRACE_EVENT_FORK => {
-                            events.push(PtraceEvent::SpawnChild);
-                        }
-                        libc::PTRACE_EVENT_VFORK => {
-                            events.push(PtraceEvent::SpawnChild);
-                        }
-                        libc::PTRACE_EVENT_CLONE => {
-                            events.push(PtraceEvent::SpawnChild);
-                        }
-                        libc::PTRACE_EVENT_EXIT => {
-                            let exit_status = pid.ptrace_geteventmsg();
-                            events.push(PtraceEvent::Exit(exit_status as isize));
-                        }
-                        _ => panic!("Unknown ptrace event: {}", event),
-                    }
-                }
-            } else {
-                events.push(PtraceEvent::Exit(-stopsig as isize));
-            }
-        }
-
-        pid
-    }
-}
+use ptrace::event_debugger::{EventDrivenPtraceDebugger, PtraceEvent};
 
 
 #[derive(Default)]
@@ -367,7 +265,12 @@ impl LinuxPtraceDebuggingClient {
                 };
             }
             _ => {
-                panic!("Unknown syscall {}", user_regs.orig_ax);
+                eprintln!("Unknown syscall {}", user_regs.orig_ax);
+                return Syscall {
+                    name: format!("UNKNOWN<{}>", user_regs.orig_ax),
+                    args: vec![
+                    ],
+                };
             }
         }
     }
@@ -388,6 +291,7 @@ impl DebuggingClient for LinuxPtraceDebuggingClient {
             let farg = args.first().map(|s| s.clone()).unwrap_or("".to_string());
 
             let mut debugger = EventDrivenPtraceDebugger::new(&binary_path, "Debuggee", &farg);
+            let mut local_debugger_state = DebuggerState::default();
 
             let mut child = debugger.start();
 
@@ -398,8 +302,7 @@ impl DebuggingClient for LinuxPtraceDebuggingClient {
             'debug_loop: loop {
                 let msg: Msg = reciever.recv().expect("failed to get msg");
                 println!("Got early msg {:?}", msg);
-                debugger
-                    .local_debugger_state
+                local_debugger_state
                     .apply_state_transform(msg.clone());
                 match msg {
                     Msg::Start => {
@@ -418,7 +321,6 @@ impl DebuggingClient for LinuxPtraceDebuggingClient {
                             // Reinstall any pending breakpoints
                             while let Some(address) = breakpoints_pending_reinstall.pop() {
                                 let bp = debugger
-                                    .local_debugger_state
                                     .breakpoints
                                     .iter_mut()
                                     .find(|bp| bp.address == address)
@@ -627,32 +529,32 @@ impl DebuggingClient for LinuxPtraceDebuggingClient {
                             loop {
                                 let msg = reciever.recv().expect("No continue");
                                 println!("Got msg {:?}", msg);
-                                debugger
-                                    .local_debugger_state
+                                local_debugger_state
                                     .apply_state_transform(msg.clone());
                                 match msg {
                                     Msg::Continue | Msg::Start => break,
                                     Msg::SingleStep(s) => is_singlestep = s,
-                                    Msg::AddBreakpoint(_bp) => {
+                                    Msg::AddBreakpoint(bp) => {
                                         //TODO: does this work with bp on other threads?
-                                        let bp = debugger
-                                            .local_debugger_state
-                                            .breakpoints
-                                            .last_mut()
-                                            .unwrap();
-                                        let success = bp.install(child);
-                                        // println!("Installed bp at {:?}, success: {}", bp, success);
+                                        // let bp2 = local_debugger_state
+                                        //     .breakpoints
+                                        //     .last_mut()
+                                        //     .unwrap();
+                                        // let success = bp2.install(child);
+
+                                        debugger.breakpoints.push(bp);
+                                        debugger.breakpoints.last_mut().unwrap().install(child);
                                     }
                                     Msg::DoSingleStep => {
                                         pid.ptrace_singlestep();
                                         continue 'big_exit;
                                     }
                                     Msg::InstallBreakpoint { address } => {
-                                        let bp = debugger.local_debugger_state.breakpoints.iter_mut().find(|bp| bp.address == address).expect("Attempt to install breakpoint that has not been added");
+                                        let bp = debugger.breakpoints.iter_mut().find(|bp| bp.address == address).expect("Attempt to install breakpoint that has not been added");
                                         bp.install(child);
                                     }
                                     Msg::RemoveBreakpoint(baddr) => {
-                                        let bp = debugger.local_debugger_state.breakpoints.iter_mut().find(|bp| bp.address == baddr).expect("Attempt to remove breakpoint that has not been added");
+                                        let bp = debugger.breakpoints.iter_mut().find(|bp| bp.address == baddr).expect("Attempt to remove breakpoint that has not been added");
                                         bp.uninstall(child);
                                     }
                                     Msg::Restart => {
@@ -678,14 +580,16 @@ impl DebuggingClient for LinuxPtraceDebuggingClient {
                             }
                         }
                     }
-                    Msg::AddBreakpoint(_bp) => {
+                    Msg::AddBreakpoint(bp) => {
                         //TODO: does this work with bp on other threads?
-                        let bp = debugger
-                            .local_debugger_state
-                            .breakpoints
-                            .last_mut()
-                            .unwrap();
-                        let success = bp.install(child);
+                        // let bp2 = local_debugger_state
+                        //     .breakpoints
+                        //     .last_mut()
+                        //     .unwrap();
+                        // let success = bp2.install(child);
+
+                        debugger.breakpoints.push(bp);
+                        debugger.breakpoints.last_mut().unwrap().install(child);
                         // println!("Installed bp at {:?}, success: {}", bp, success);
                     }
                     _ => {
