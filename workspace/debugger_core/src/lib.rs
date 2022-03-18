@@ -62,12 +62,8 @@ pub struct Process(pub i32);
 /// Messages send from the ui to the debugging client
 #[derive(Clone, Debug)]
 pub enum Msg {
-    /// Start running an instance of the binary
-    Start,
     /// Resume executing the binary
     Continue,
-    /// Set wether to single step (true) or syscall step (false)
-    SingleStep(bool),
     /// Register and install a breakpoint
     AddBreakpoint(Breakpoint),
     /// Remove the breakpoint at the given address

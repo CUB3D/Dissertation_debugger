@@ -78,7 +78,7 @@ impl InnerRender for WidgetControls {
         //Continue button, only shown when paused on a breakpoint or waiting to start
         if state.status == DebuggerStatus::ReadyToStart ||  state.status == DebuggerStatus::Breakpoint || state.status == DebuggerStatus::Paused {
             if ui.small_button("Continue") {
-                state.send_msg(Msg::Start);
+                state.send_msg(Msg::Continue);
             }
 
             //TODO: this wont work if you click this first instead of continue

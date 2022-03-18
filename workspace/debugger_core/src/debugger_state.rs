@@ -194,8 +194,8 @@ impl DebuggerState {
                 DebuggerMsg::ChildProcessSpawn(p) => {
                     self.process_state.push(ProcessState::with_process(p));
                     // TODO: hack here, we send this 2 times, onece for the new child, once for the parent
-                    self.sender.as_ref().unwrap().send(Msg::Continue);
-                    self.sender.as_ref().unwrap().send(Msg::Continue);
+                    // self.sender.as_ref().unwrap().send(Msg::Continue);
+                    // self.sender.as_ref().unwrap().send(Msg::Continue);
                 }
                 DebuggerMsg::CallStack(pid, cs) => {
                     self.process_state
@@ -266,11 +266,9 @@ impl DebuggerState {
     /// for all recieved messages -> the two states will always remain in sync
     pub fn apply_state_transform(&mut self, msg: Msg) {
         match msg {
-            Msg::Start => {
+            Msg::Continue => {
                 self.status = DebuggerStatus::Running;
             }
-            Msg::Continue => {}
-            Msg::SingleStep(_) => {}
             Msg::AddBreakpoint(b) => self.breakpoints.push(b),
             Msg::RemoveBreakpoint(baddr) => {
                 let index = self
