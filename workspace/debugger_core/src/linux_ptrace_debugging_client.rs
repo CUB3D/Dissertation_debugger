@@ -37,7 +37,7 @@ pub struct EventDrivenPtraceDebugger {
 impl EventDrivenPtraceDebugger {
     pub fn new(binary: &str, proc_name: &str, arg: &str) -> Self {
         Self {
-            debugger: Ptrace::new(binary, proc_name, arg).expect("Failed to start debugger"),
+            debugger: Ptrace::new(binary, proc_name, &[arg]).expect("Failed to start debugger"),
             in_syscall: Default::default(),
             local_debugger_state: Default::default(),
         }
@@ -47,42 +47,6 @@ impl EventDrivenPtraceDebugger {
         let child = self.debugger.inital_spawn_child();
         //child.ptrace_singlestep();
         child
-    }
-
-    /// Unwind the call stack for the given process
-    fn get_call_stack(&self, pid: Process) -> Result<CallStack, Box<dyn Error>> {
-        let mut call_stack = Vec::new();
-
-        let state = PTraceState::new(pid.0 as u32)?;
-        let space = AddressSpace::new(Accessors::ptrace(), Byteorder::DEFAULT)?;
-        let mut cursor = StackCursor::remote(&space, &state)?;
-        loop {
-            let ip = cursor.register(RegNum::IP)?;
-
-            match (cursor.procedure_info(), cursor.procedure_name()) {
-                (Ok(ref info), Ok(ref name)) if ip == info.start_ip() + name.offset() => {
-                    call_stack.push(StackFrame {
-                        addr: ip as usize,
-                        description: format!(
-                            "{} ({:#016x}) + {:#x}",
-                            name.name(),
-                            info.start_ip(),
-                            name.offset()
-                        ),
-                    });
-                }
-                _ => call_stack.push(StackFrame {
-                    addr: ip as usize,
-                    description: "????".to_string(),
-                }),
-            }
-
-            if !cursor.step()? {
-                break;
-            }
-        }
-
-        Ok(CallStack(call_stack))
     }
 
     pub fn wait_for_event(&mut self, events: &mut Vec<PtraceEvent>) -> Process {
@@ -157,10 +121,47 @@ impl EventDrivenPtraceDebugger {
     }
 }
 
+
 #[derive(Default)]
 pub struct LinuxPtraceDebuggingClient {}
 
 impl LinuxPtraceDebuggingClient {
+    /// Unwind the call stack for the given process
+    fn get_call_stack(pid: Process) -> Result<CallStack, Box<dyn Error>> {
+        let mut call_stack = Vec::new();
+
+        let state = PTraceState::new(pid.0 as u32)?;
+        let space = AddressSpace::new(Accessors::ptrace(), Byteorder::DEFAULT)?;
+        let mut cursor = StackCursor::remote(&space, &state)?;
+        loop {
+            let ip = cursor.register(RegNum::IP)?;
+
+            match (cursor.procedure_info(), cursor.procedure_name()) {
+                (Ok(ref info), Ok(ref name)) if ip == info.start_ip() + name.offset() => {
+                    call_stack.push(StackFrame {
+                        addr: ip as usize,
+                        description: format!(
+                            "{} ({:#016x}) + {:#x}",
+                            name.name(),
+                            info.start_ip(),
+                            name.offset()
+                        ),
+                    });
+                }
+                _ => call_stack.push(StackFrame {
+                    addr: ip as usize,
+                    description: "????".to_string(),
+                }),
+            }
+
+            if !cursor.step()? {
+                break;
+            }
+        }
+
+        Ok(CallStack(call_stack))
+    }
+
     //TODO: idea: make this struct repr(c) then we can cast easily
     fn convert_ptrace_registers(oregs: &Box<ptrace::UserRegs>) -> Box<crate::types::UserRegs> {
         let mut regs = Box::<crate::types::UserRegs>::default();
@@ -433,7 +434,7 @@ impl DebuggingClient for LinuxPtraceDebuggingClient {
                                 match evt {
                                     PtraceEvent::SyscallEnter => {
                                         // If we can get a call stack, forward that to the ui
-                                        if let Ok(call_stack) = debugger.get_call_stack(pid) {
+                                        if let Ok(call_stack) = LinuxPtraceDebuggingClient::get_call_stack(pid) {
                                             send_from_debug
                                                 .send(DebuggerMsg::CallStack(pid, call_stack));
                                         }
@@ -460,10 +461,9 @@ impl DebuggingClient for LinuxPtraceDebuggingClient {
                                     }
                                     PtraceEvent::Exit(exit_status) => {
                                         // If we can get a call stack, forward that to the ui
-                                        if let Ok(call_stack) = debugger.get_call_stack(pid) {
+                                        if let Ok(call_stack) = LinuxPtraceDebuggingClient::get_call_stack(pid) {
                                             send_from_debug
-                                                .send(DebuggerMsg::CallStack(pid, call_stack))
-                                                .expect("Send fail");
+                                                .send(DebuggerMsg::CallStack(pid, call_stack));
                                         }
 
                                         // If we can get a memory map for the process
@@ -532,10 +532,9 @@ impl DebuggingClient for LinuxPtraceDebuggingClient {
                                     }
                                     PtraceEvent::Trap => {
                                         // If we can get a call stack, forward that to the ui
-                                        if let Ok(call_stack) = debugger.get_call_stack(pid) {
+                                        if let Ok(call_stack) = LinuxPtraceDebuggingClient::get_call_stack(pid) {
                                             send_from_debug
-                                                .send(DebuggerMsg::CallStack(pid, call_stack))
-                                                .expect("Send fail");
+                                                .send(DebuggerMsg::CallStack(pid, call_stack));
                                         }
 
                                         // If we can get a memory map for the process
@@ -583,10 +582,9 @@ impl DebuggingClient for LinuxPtraceDebuggingClient {
                                             .expect("Faeild to send from debug");
 
                                         // If we can get a call stack, forward that to the ui
-                                        if let Ok(call_stack) = debugger.get_call_stack(pid) {
+                                        if let Ok(call_stack) = LinuxPtraceDebuggingClient::get_call_stack(pid) {
                                             send_from_debug
-                                                .send(DebuggerMsg::CallStack(pid, call_stack))
-                                                .expect("Send fail");
+                                                .send(DebuggerMsg::CallStack(pid, call_stack));
                                         }
 
                                         // If we can get a memory map for the process
