@@ -8,6 +8,7 @@ pub mod process;
 pub mod breakpoint;
 #[cfg(target_os = "linux")]
 pub mod types;
+pub mod event_debugger;
 
 #[cfg(target_os = "linux")]
 pub use process::*;
@@ -53,17 +54,22 @@ mod linux_ptrace {
 
     pub struct Ptrace {
         process: CString,
-        process_name: CString,
-        arg: CString,
+        args: Vec<CString>,
     }
 
     impl Ptrace {
         /// Create a new instance of `Ptrace`
-        pub fn new(process: &str, process_name: &str, arg: &str) -> PTraceResult<Self> {
+        pub fn new(process: &str, process_name: &str, args: &[&str]) -> PTraceResult<Self> {
+
+            let mut cargs = Vec::new();
+            cargs.push(CString::new(process_name)?);
+            for a in args {
+                cargs.push(CString::new(*a)?);
+            }
+
             Ok(Self {
                 process: CString::new(process)?,
-                process_name: CString::new(process_name)?,
-                arg: CString::new(arg)?,
+                args: cargs,
             })
         }
 
@@ -80,10 +86,17 @@ mod linux_ptrace {
                 // Mark that this process should not use ASLR so we can set breakpoints easily
                 unsafe { libc::personality(libc::ADDR_NO_RANDOMIZE as u64) };
 
-                let x = CString::new("-x").unwrap();
+                let mut pointers = Vec::new();
+                for arg in &self.args {
+                    pointers.push(arg.as_ptr());
+                }
+                pointers.push(core::ptr::null_mut() as *const _);
 
                 // Spawn the child
-                let r = unsafe { libc::execl(self.process.as_ptr(), self.process_name.as_ptr(), x.as_ptr(), self.arg.as_ptr(), 0) };
+                let r = unsafe { libc::execv(self.process.as_ptr(),  pointers.as_ptr()) };
+
+                // Note: this drop forces the vec to not be dropped until after the evecv finishes, which will never happen if it works
+                drop(pointers);
                 panic!("Failed to start subprocess: {} {}", r, unsafe { *libc::__errno_location() });
             }
 
