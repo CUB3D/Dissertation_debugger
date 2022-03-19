@@ -14,35 +14,6 @@ impl Default for WidgetControls {
     }
 }
 
-impl WidgetControls {
-    fn send_continue(&self, state: &mut DebuggerState) {
-        if let Some(bp) = &state.current_breakpoint {
-            state
-                .sender
-                .as_ref()
-                .unwrap()
-                .send(Msg::DoSingleStep)
-                .expect("Failed to send msg");
-            state
-                .sender
-                .as_ref()
-                .unwrap()
-                .send(Msg::InstallBreakpoint {
-                    address: bp.address,
-                })
-                .expect("Failed to send msg");
-            state.current_breakpoint = None;
-        }
-        state
-            .sender
-            .as_ref()
-            .unwrap()
-            .send(Msg::Continue)
-            .expect("Failed to send msg");
-        state.halt_reason = "".to_string();
-    }
-}
-
 impl InnerRender for WidgetControls {
     fn render_inner(&mut self, state: &mut DebuggerState, ui: &Ui) {
         if state.elf.is_none() {
@@ -50,7 +21,7 @@ impl InnerRender for WidgetControls {
             return;
         }
 
-        if state.status == DebuggerStatus::Running || state.status == DebuggerStatus::Dead {
+        if state.status == DebuggerStatus::Running || state.status == DebuggerStatus::Dead || state.status == DebuggerStatus::Breakpoint {
             // Restart button, only shown when a process is currently running
             if ui.small_button("Restart") {
                 state
@@ -61,7 +32,7 @@ impl InnerRender for WidgetControls {
                     .expect("Failed to send msg");
             }
         }
-        if state.status == DebuggerStatus::Running {
+        if state.status == DebuggerStatus::Running || state.status == DebuggerStatus::Breakpoint {
             // Stop button, only shown when a process is currently running
             if ui.small_button("Stop") {
                 state

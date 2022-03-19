@@ -178,6 +178,8 @@ impl DebuggerState {
                     self.status = DebuggerStatus::Breakpoint;
                 }
                 DebuggerMsg::ProcessSpawn(p) => {
+                    println!("Proc spawn {:?}", p);
+
                     // This is a restart
                     // TODO: have a reset debugger msg
                     if self.process.is_some() {
@@ -185,6 +187,7 @@ impl DebuggerState {
                         for bp in &self.breakpoints {
                             self.sender.as_ref().unwrap().send(Msg::AddBreakpoint(*bp));
                         }
+                        self.status = DebuggerStatus::ReadyToStart;
                     }
 
                     self.process = Some(p);
@@ -198,6 +201,8 @@ impl DebuggerState {
                     // self.sender.as_ref().unwrap().send(Msg::Continue);
                 }
                 DebuggerMsg::CallStack(pid, cs) => {
+                    println!("callstack {:?} {:?}", pid, cs);
+
                     self.process_state
                         .iter_mut()
                         .find(|p| p.process == pid)
@@ -278,7 +283,6 @@ impl DebuggerState {
                     .expect("Failed to find bp");
                 self.breakpoints.remove(index);
             }
-            Msg::InstallBreakpoint { .. } => {}
             Msg::DoSingleStep => {}
             Msg::Restart => {}
             Msg::Stop => {}
