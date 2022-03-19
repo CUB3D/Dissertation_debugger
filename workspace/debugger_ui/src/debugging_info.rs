@@ -52,10 +52,8 @@ pub fn parse_dwarf_info(bytes: &[u8], elf_parsed: &Elf) -> DebuggingInfo {
             // );
             let unit = dwarf.unit(header).unwrap();
 
-            let mut depth = 0;
             let mut entries = unit.entries();
-            while let Some((delta_depth, entry)) = entries.next_dfs().unwrap() {
-                depth += delta_depth;
+            while let Some((_delta_depth, entry)) = entries.next_dfs().unwrap() {
                 // println!("<{}><{:x}> {}", depth, /*entry.offset().0*/0, entry.tag());
 
                 // Iterate over the attributes in the DIE.

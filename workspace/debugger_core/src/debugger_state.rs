@@ -163,7 +163,7 @@ impl DebuggerState {
                     if self.process.is_some() {
                         self.process_state.clear();
                         for bp in &self.breakpoints {
-                            self.sender.as_ref().unwrap().send(Msg::AddBreakpoint(*bp));
+                            self.sender.as_ref().unwrap().send(Msg::AddBreakpoint(*bp)).expect("Failed to send");
                         }
                         self.status = DebuggerStatus::ReadyToStart;
                     }
@@ -263,6 +263,6 @@ impl DebuggerState {
     /// Send a message to the debugging client, while ensuring that any transforms are applied to the local state
     pub fn send_msg(&mut self, msg: Msg) {
         self.apply_state_transform(msg.clone());
-        self.sender.as_ref().unwrap().send(msg);
+        self.sender.as_ref().unwrap().send(msg).expect("Failed to send");
     }
 }

@@ -172,11 +172,11 @@ impl InnerRender for WidgetDisassemble {
                                     .sender
                                     .as_ref()
                                     .unwrap()
-                                    .send(Msg::RemoveBreakpoint(instruction.ip() as usize));
+                                    .send(Msg::RemoveBreakpoint(instruction.ip() as usize)).expect("Failed to send");
                             } else {
                                 let bp = Breakpoint::new(instruction.ip() as usize);
                                 state.breakpoints.push(bp);
-                                state.sender.as_ref().unwrap().send(Msg::AddBreakpoint(bp));
+                                state.sender.as_ref().unwrap().send(Msg::AddBreakpoint(bp)).expect("Failed to send");
                             }
                         }
 

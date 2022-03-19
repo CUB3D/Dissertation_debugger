@@ -4,7 +4,7 @@
 #![feature(new_uninit)]
 
 use crate::debugger_ui::DebuggerUi;
-use clap::{App, Arg};
+use clap::{Arg, Command};
 use debugger_core::debugger_state::DebuggerState;
 
 pub mod breakpoints;
@@ -30,12 +30,12 @@ pub mod ui;
 // breakpoints api that works
 
 fn main() {
-    let matches = App::new("debugger")
+    let matches = Command::new("debugger")
         .version("v0.1")
         .author("Callum Thomson")
         .about("A debugger")
         .arg(
-            Arg::with_name("binary")
+            Arg::new("binary")
                 .value_name("target")
                 .help("The path to the binary to debug")
                 .takes_value(true)

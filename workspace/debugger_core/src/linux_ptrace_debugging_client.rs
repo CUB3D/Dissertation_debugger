@@ -478,7 +478,7 @@ impl DebuggingClient for LinuxPtraceDebuggingClient {
                             // If we can get a call stack, forward that to the ui
                             if let Ok(call_stack) = LinuxPtraceDebuggingClient::get_call_stack(pid)
                             {
-                                send_from_debug.send(DebuggerMsg::CallStack(pid, call_stack));
+                                send_from_debug.send(DebuggerMsg::CallStack(pid, call_stack)).expect("Failed to send");
                             }
 
                             // If we can get a memory map for the process
@@ -548,7 +548,7 @@ impl DebuggingClient for LinuxPtraceDebuggingClient {
                             // If we can get a call stack, forward that to the ui
                             if let Ok(call_stack) = LinuxPtraceDebuggingClient::get_call_stack(pid)
                             {
-                                send_from_debug.send(DebuggerMsg::CallStack(pid, call_stack));
+                                send_from_debug.send(DebuggerMsg::CallStack(pid, call_stack)).expect("Failed to send");
                             }
 
                             // If we can get a memory map for the process
@@ -591,7 +591,7 @@ impl DebuggingClient for LinuxPtraceDebuggingClient {
                             // If we can get a call stack, forward that to the ui
                             if let Ok(call_stack) = LinuxPtraceDebuggingClient::get_call_stack(pid)
                             {
-                                send_from_debug.send(DebuggerMsg::CallStack(pid, call_stack));
+                                send_from_debug.send(DebuggerMsg::CallStack(pid, call_stack)).expect("Failed to send");
                             }
 
                             // If we can get a memory map for the process
