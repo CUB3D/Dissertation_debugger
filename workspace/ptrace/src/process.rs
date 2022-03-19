@@ -127,6 +127,10 @@ impl Process {
         unsafe { libc::kill(self.0, libc::SIGSTOP) };
     }
 
+    pub fn sigkill(&self) {
+        unsafe { libc::kill(self.0, libc::SIGKILL) };
+    }
+
     #[cfg(feature = "snapshots")]
     /// Take a snapshot of the given process, snapshots include the full register (integer, fp) state + stack state
     fn snapshot(&mut self) -> Snapshot {

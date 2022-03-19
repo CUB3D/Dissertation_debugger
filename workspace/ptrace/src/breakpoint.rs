@@ -27,15 +27,18 @@ impl Breakpoint {
         }
 
         // Get the original instruction
-        let original_instruction = child.ptrace_peektext(self.address) as u64;
-        // Save the original byte
-        self.original_byte = Some((original_instruction & 0xFF) as u8);
-        // Path the instruction
-        let patched_instruction = (original_instruction & 0xFFFF_FFFF_FFFF_FF00u64) | 0xCC;
-        // Write the patched instruction to the text section
-        unsafe { libc::ptrace(libc::PTRACE_POKETEXT, child.0, self.address, patched_instruction) };
-        // println!("Installed bp @ 0x{:x}", self.address);
-        return true;
+        return if let Some(original_instruction) = child.ptrace_peektext_safe(self.address) {
+            // Save the original byte
+            self.original_byte = Some((original_instruction & 0xFF) as u8);
+            // Path the instruction
+            let patched_instruction = (original_instruction & 0xFFFF_FFFF_FFFF_FF00u64) | 0xCC;
+            // Write the patched instruction to the text section
+            unsafe { libc::ptrace(libc::PTRACE_POKETEXT, child.0, self.address, patched_instruction) };
+            // println!("Installed bp @ 0x{:x}", self.address);
+            true
+        } else {
+            false
+        }
     }
 
     /// Uninstall the breakpoint from the target

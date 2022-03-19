@@ -68,10 +68,7 @@ pub enum Msg {
     AddBreakpoint(Breakpoint),
     /// Remove the breakpoint at the given address
     RemoveBreakpoint(usize),
-    /// Install the breakpoint that has already been added at the given address
-    InstallBreakpoint {
-        address: usize,
-    },
+    /// Execute for a single step
     DoSingleStep,
     /// Restart the running process
     Restart,

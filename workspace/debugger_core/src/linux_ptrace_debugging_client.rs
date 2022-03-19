@@ -319,7 +319,6 @@ impl DebuggingClient for LinuxPtraceDebuggingClient {
             let farg = args.first().map(|s| s.clone()).unwrap_or("".to_string());
 
             let mut debugger = EventDrivenPtraceDebugger::new(&binary_path, "Debuggee", &farg);
-            let mut local_debugger_state = DebuggerState::default();
 
             let mut child = debugger.start();
 
@@ -338,25 +337,30 @@ impl DebuggingClient for LinuxPtraceDebuggingClient {
                 }
                 println!("Got start msg");
 
-                child.ptrace_syscall();
-
                 let mut breakpoints_pending_reinstall = Vec::new();
 
                 //TODO: other msgs
                 while let Some(msg) = state_messages.write().unwrap().pop() {
+                    println!("Got early msg {:?}", msg);
                     match msg {
                         Msg::AddBreakpoint(bp) => {
-                            debugger.install_breakpoint(bp);
-                            for child in &debugger.processes {
-                                breakpoints_pending_reinstall.push((*child, bp.address));
-                            }
+                            let mut bp = bp.clone();
+                            bp.install(child);
+                            debugger.breakpoints.push(bp);
                         }
                         Msg::RemoveBreakpoint(addr) => {
-                            debugger.remove_breakpoint(addr);
+                            if let Some(bp) = debugger.breakpoints.iter_mut().find(|bp| bp.address == addr) {
+                                bp.uninstall(child);
+                            }
+                            if let Some(bp_pos) = debugger.breakpoints.iter_mut().position(|bp| bp.address == addr) {
+                                debugger.breakpoints.remove(bp_pos);
+                            }
                         }
                         _ => unimplemented!("Got early state msg: {:?}", msg),
                     }
                 }
+
+                child.ptrace_syscall();
 
                 'big_exit: loop {
                     //println!("Waiting for ptrace events");
@@ -369,17 +373,7 @@ impl DebuggingClient for LinuxPtraceDebuggingClient {
                             continue;
                         }
 
-                        let bp = debugger
-                            .breakpoints
-                            .get_mut(&bp_pid)
-                            .map(|child_bps| {
-                                child_bps.iter_mut()
-                                    .find(|bp| bp.address == address)
-                            })
-                            .flatten()
-                            .expect(
-                                "Attempt to install breakpoint that has not been added",
-                            );
+                        let bp = debugger.breakpoints.iter_mut().find(|bp| bp.address == address).expect("Attempt to install breakpoint that has not been added");
                         bp.install(bp_pid);
                         println!("After installing bp = {:?}", bp);
                         breakpoints_pending_reinstall.remove(index);
@@ -391,19 +385,45 @@ impl DebuggingClient for LinuxPtraceDebuggingClient {
                         println!("Got state msg: {:?}", msg);
                         match msg {
                             Msg::AddBreakpoint(bp) => {
-                                debugger.install_breakpoint(bp);
-                                for child in &debugger.processes {
-                                    breakpoints_pending_reinstall.push((*child, bp.address));
-                                }
+                                let mut bp = bp.clone();
+                                bp.install(pid);
+                                debugger.breakpoints.push(bp);
                             }
                             Msg::RemoveBreakpoint(addr) => {
-                                debugger.remove_breakpoint(addr);
+                                let bp = debugger.breakpoints.iter_mut().find(|bp| bp.address == addr).expect("Removed breakpoint that doesnt exist");
+                                bp.uninstall(pid);
+                                if let Some(bp_pos) = debugger.breakpoints.iter_mut().position(|bp| bp.address == addr) {
+                                    debugger.breakpoints.remove(bp_pos);
+                                }
 
                                 while let Some(pos) = breakpoints_pending_reinstall.iter().position(|(_, bp_addr)| *bp_addr == addr) {
                                     breakpoints_pending_reinstall.remove(pos);
                                 }
                             }
                             _ => unimplemented!("Got early state msg: {:?}", msg),
+                        }
+                    }
+
+                    while let Some(msg) = control_messages.write().unwrap().pop() {
+                        println!("Got ctrl msg: {:?}", msg);
+                        match msg {
+                            Msg::Restart => {
+                                //TODO: kill the child
+                                child = debugger.start();
+
+                                breakpoints_pending_reinstall.clear();
+
+                                send_from_debug
+                                    .send(DebuggerMsg::ProcessSpawn(child))
+                                    .expect("Send proc");
+                                continue 'debug_loop;
+                            }
+                            Msg::Stop => {
+                                child.sigkill();
+                                child.ptrace_syscall();
+                                continue 'big_exit;
+                            }
+                            _ => unimplemented!("Got early ctrl msg: {:?}", msg),
                         }
                     }
 
@@ -610,6 +630,26 @@ impl DebuggingClient for LinuxPtraceDebuggingClient {
                                 Msg::Continue => {
                                     break;
                                 }
+                                Msg::DoSingleStep => {
+                                    pid.ptrace_singlestep();
+                                    continue 'big_exit;
+                                }
+                                Msg::Restart => {
+                                    //TODO: kill the child
+                                    child = debugger.start();
+
+                                    breakpoints_pending_reinstall.clear();
+
+                                    send_from_debug
+                                        .send(DebuggerMsg::ProcessSpawn(child))
+                                        .expect("Send proc");
+                                    continue 'debug_loop;
+                                }
+                                Msg::Stop => {
+                                    child.sigkill();
+                                    child.ptrace_syscall();
+                                    continue 'big_exit;
+                                }
                                 _ => unimplemented!("Got control msg: {:?}", msg),
                             }
                         }
@@ -621,13 +661,16 @@ impl DebuggingClient for LinuxPtraceDebuggingClient {
                         println!("Got state msg: {:?}", msg);
                         match msg {
                             Msg::AddBreakpoint(bp) => {
-                                debugger.install_breakpoint(bp);
-                                for child in &debugger.processes {
-                                    breakpoints_pending_reinstall.push((*child, bp.address));
-                                }
+                                let mut bp = bp.clone();
+                                bp.install(pid);
+                                debugger.breakpoints.push(bp);
                             }
                             Msg::RemoveBreakpoint(addr) => {
-                                debugger.remove_breakpoint(addr);
+                                let bp = debugger.breakpoints.iter_mut().find(|bp| bp.address == addr).expect("Removed breakpoint that doesnt exist");
+                                bp.uninstall(pid);
+                                if let Some(bp_pos) = debugger.breakpoints.iter_mut().position(|bp| bp.address == addr) {
+                                    debugger.breakpoints.remove(bp_pos);
+                                }
 
                                 while let Some(pos) = breakpoints_pending_reinstall.iter().position(|(_, bp_addr)| *bp_addr == addr) {
                                     breakpoints_pending_reinstall.remove(pos);

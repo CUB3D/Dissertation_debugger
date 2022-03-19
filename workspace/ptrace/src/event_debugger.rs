@@ -21,7 +21,7 @@ pub enum PtraceEvent {
 pub struct EventDrivenPtraceDebugger {
     pub debugger: Ptrace,
     pub in_syscall: HashMap<Process, bool>,
-    pub breakpoints: HashMap<Process, Vec<Breakpoint>>,
+    pub breakpoints: Vec<Breakpoint>,
     pub processes: Vec<Process>,
 }
 
@@ -30,46 +30,33 @@ impl EventDrivenPtraceDebugger {
         Self {
             debugger: Ptrace::new(binary, proc_name, &[arg]).expect("Failed to start debugger"),
             in_syscall: Default::default(),
-            breakpoints: Default::default(),
             processes: Default::default(),
+            breakpoints: Default::default(),
         }
     }
 
     pub fn start(&mut self) -> Process {
+        self.processes.clear();
+        self.in_syscall.clear();
+        self.breakpoints.clear();
+
         let child = self.debugger.inital_spawn_child();
         self.processes.push(child);
         child
     }
 
-    pub fn install_breakpoint(&mut self, bp: Breakpoint) {
-        for child in &self.processes {
-            let mut bp = bp.clone();
-            // bp.install(*child);
-            // println!("After installing bp = {:?}", bp);
-            let mut child_bps = self.breakpoints.get(child).unwrap_or(&Vec::new()).clone();
-            child_bps.push(bp);
-            self.breakpoints.insert(*child, child_bps);
-        }
-    }
-
-    pub fn remove_breakpoint(&mut self, addr: usize) {
-        for child in &self.processes {
-            if let Some(child_bps) = self.breakpoints.get_mut(child) {
-                if let Some(bp) = child_bps.iter_mut().find(|bp| bp.address == addr) {
-                    bp.uninstall(*child);
-                }
-
-                if let Some(pos) = child_bps.iter_mut().position(|bp| bp.address == addr) {
-                    child_bps.remove(pos);
-                }
-            }
-        }
-    }
-
     pub fn wait_for_event(&mut self) -> (Process, PtraceEvent) {
         let in_syscall = &mut self.in_syscall;
 
-        let (pid, status) = Process::wait_any();
+        // Wait for a process thats in our process list
+        // If its not in the list its probably from an old instance
+        let (pid, status) = loop {
+            let (pid, status) = Process::wait_any();
+            if self.processes.contains(&pid) {
+               break (pid, status);
+            }
+        };
+
 
         if status.wifstopped() {
             // Handle the various trap types
@@ -90,7 +77,7 @@ impl EventDrivenPtraceDebugger {
                     // We know we didnt hit a syscall but we might have hit a manual breakpoint, check if we hit a 0xcc
                     let user_regs = pid.ptrace_getregs();
                     if pid.ptrace_peektext(user_regs.ip as usize - 1) & 0xFF == 0xCC {
-                        let bp = self.breakpoints
+                        /*let bp = self.breakpoints
                             .get_mut(&pid)
                             .map(|child_bps| {
                                 child_bps.iter_mut()
@@ -98,7 +85,9 @@ impl EventDrivenPtraceDebugger {
                             })
                             .flatten()
                             .expect("Hit a breakpoint, but we can't find it to uninstall");
-                        println!("Before uninstall bp = {:?}", bp);
+                        println!("Before uninstall bp = {:?}", bp);*/
+
+                        let bp = self.breakpoints.iter_mut().find(|bp| bp.address == user_regs.ip as usize - 1).expect("Hit a breakpoint, but we can't find it to uninstall");
                         bp.uninstall(pid);
                         // Go back to the start of the original instruction so it actually gets executed
                         unsafe {
