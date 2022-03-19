@@ -1,10 +1,10 @@
 use crate::debugger_ui::widget::{InnerRender, UiMenu};
 use crate::{define_ui_menu, DebuggerState};
 
-use imgui::{TabBarFlags, TableColumnSetup, Ui, Window};
+use imgui::{TableColumnSetup, Ui, Window};
 
-use std::ffi::CString;
-use std::ops::Range;
+
+
 
 #[derive(Default)]
 pub struct WidgetMemoryMap {

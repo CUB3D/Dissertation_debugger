@@ -220,7 +220,7 @@ impl DebuggerState {
                         .expect("No process to set mem for")
                         .memory = mem;
                 }
-                DebuggerMsg::ProcessDeath(pid, status) => {
+                DebuggerMsg::ProcessDeath(pid, _status) => {
                     self.process_state
                         .iter_mut()
                         .find(|p| p.process == pid)

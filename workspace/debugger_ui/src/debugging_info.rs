@@ -1,5 +1,5 @@
 use goblin::elf::Elf;
-use std::io::Cursor;
+
 
 /// A subprogram (function) as defined by DWARF
 #[derive(Clone, Debug)]
@@ -82,7 +82,7 @@ pub fn parse_dwarf_info(bytes: &[u8], elf_parsed: &Elf) -> DebuggingInfo {
                     gimli::DW_TAG_variable => {
                         let attrs = attrs;
 
-                        for attr in attrs {
+                        for _attr in attrs {
                             // println!("Got variable {:?} - {:?}", attr.name().static_string(), attr.value().exprloc_value());
                         }
                     }

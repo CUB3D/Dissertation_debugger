@@ -1,13 +1,13 @@
 use crate::debugger_ui::widget::{InnerRender, UiMenu};
 use crate::{define_ui_menu, DebuggerState};
-use imgui_memory_editor::MemoryEditor;
+
 
 use imgui::{TableColumnSetup, Ui, Window};
 
-use debugger_core::ProcessState;
-use std::ffi::CString;
-use std::ops::Range;
-use std::os::linux::raw::stat;
+
+
+
+
 
 #[derive(Default)]
 pub struct WidgetMemoryView {
