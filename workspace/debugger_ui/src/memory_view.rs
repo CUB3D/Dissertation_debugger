@@ -4,10 +4,10 @@ use imgui_memory_editor::MemoryEditor;
 
 use imgui::{TableColumnSetup, Ui, Window};
 
+use debugger_core::ProcessState;
 use std::ffi::CString;
 use std::ops::Range;
 use std::os::linux::raw::stat;
-use debugger_core::ProcessState;
 
 #[derive(Default)]
 pub struct WidgetMemoryView {
@@ -66,7 +66,10 @@ impl InnerRender for WidgetMemoryView {
                                 ui.table_next_column();
                                 for c in c {
                                     if let Some(s) = std::char::from_u32(*c as u32) {
-                                        if s.is_ascii_alphanumeric() || s.is_ascii_punctuation() || s.is_ascii_whitespace() {
+                                        if s.is_ascii_alphanumeric()
+                                            || s.is_ascii_punctuation()
+                                            || s.is_ascii_whitespace()
+                                        {
                                             ui.text(s.to_string());
                                         } else {
                                             ui.text(".");

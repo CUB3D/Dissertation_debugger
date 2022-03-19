@@ -1,5 +1,5 @@
-use std::io::Cursor;
 use goblin::elf::Elf;
+use std::io::Cursor;
 
 /// A subprogram (function) as defined by DWARF
 #[derive(Clone, Debug)]
@@ -89,9 +89,8 @@ pub fn parse_dwarf_info(bytes: &[u8], elf_parsed: &Elf) -> DebuggingInfo {
 
                     gimli::DW_TAG_subprogram => {
                         let name = {
-                            if let Some(name) = attrs
-                                .iter()
-                                .find(|a| a.name() == gimli::DW_AT_name) {
+                            if let Some(name) = attrs.iter().find(|a| a.name() == gimli::DW_AT_name)
+                            {
                                 let name_str = dwarf
                                     .attr_string(&unit, name.value())
                                     .expect("Failed to get name string");

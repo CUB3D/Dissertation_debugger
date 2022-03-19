@@ -18,9 +18,8 @@ use std::time::Duration;
 use crate::types::{MemoryMap, MemoryMapEntry, MemoryMapEntryPermissions};
 use crate::types::{Syscall, SyscallArg};
 use crate::DebuggerState;
-use unwind::{Accessors, AddressSpace, Byteorder, Cursor as StackCursor, PTraceState, RegNum};
 use ptrace::event_debugger::{EventDrivenPtraceDebugger, PtraceEvent};
-
+use unwind::{Accessors, AddressSpace, Byteorder, Cursor as StackCursor, PTraceState, RegNum};
 
 #[derive(Default)]
 pub struct LinuxPtraceDebuggingClient {}
@@ -271,8 +270,7 @@ impl LinuxPtraceDebuggingClient {
                 eprintln!("Unknown syscall {}", user_regs.orig_ax);
                 return Syscall {
                     name: format!("UNKNOWN<{}>", user_regs.orig_ax),
-                    args: vec![
-                    ],
+                    args: vec![],
                 };
             }
         }
@@ -291,29 +289,23 @@ impl DebuggingClient for LinuxPtraceDebuggingClient {
         let binary_path = binary_path.to_string();
         let args = args.iter().map(|s| s.to_string()).collect::<Vec<_>>();
 
-
-
-
         //TODO: massive hack, pls no
         let mut control_messages: Arc<RwLock<Vec<Msg>>> = Arc::new(RwLock::new(Vec::new()));
         let mut state_messages: Arc<RwLock<Vec<Msg>>> = Arc::new(RwLock::new(Vec::new()));
 
         let control_messages_local = Arc::clone(&control_messages);
         let state_messages_local = Arc::clone(&state_messages);
-        std::thread::spawn(move || {
-           loop {
-               let msg = reciever.recv().expect("failed to get msg");
-               match msg {
-                   Msg::Continue | Msg::Restart | Msg::DoSingleStep | Msg::Stop => {
-                       control_messages_local.write().unwrap().push(msg);
-                   }
-                   _ => {
-                       state_messages_local.write().unwrap().push(msg);
-                   }
-               }
-           }
+        std::thread::spawn(move || loop {
+            let msg = reciever.recv().expect("failed to get msg");
+            match msg {
+                Msg::Continue | Msg::Restart | Msg::DoSingleStep | Msg::Stop => {
+                    control_messages_local.write().unwrap().push(msg);
+                }
+                _ => {
+                    state_messages_local.write().unwrap().push(msg);
+                }
+            }
         });
-
 
         std::thread::spawn(move || {
             let farg = args.first().map(|s| s.clone()).unwrap_or("".to_string());
@@ -349,10 +341,18 @@ impl DebuggingClient for LinuxPtraceDebuggingClient {
                             debugger.breakpoints.push(bp);
                         }
                         Msg::RemoveBreakpoint(addr) => {
-                            if let Some(bp) = debugger.breakpoints.iter_mut().find(|bp| bp.address == addr) {
+                            if let Some(bp) = debugger
+                                .breakpoints
+                                .iter_mut()
+                                .find(|bp| bp.address == addr)
+                            {
                                 bp.uninstall(child);
                             }
-                            if let Some(bp_pos) = debugger.breakpoints.iter_mut().position(|bp| bp.address == addr) {
+                            if let Some(bp_pos) = debugger
+                                .breakpoints
+                                .iter_mut()
+                                .position(|bp| bp.address == addr)
+                            {
                                 debugger.breakpoints.remove(bp_pos);
                             }
                         }
@@ -368,12 +368,21 @@ impl DebuggingClient for LinuxPtraceDebuggingClient {
                     // println!("{:?} had an event {:?}", pid, evt);
 
                     // Reinstall any pending breakpoints for this thread
-                    for (index, (bp_pid, address)) in breakpoints_pending_reinstall.clone().iter().copied().enumerate() {
+                    for (index, (bp_pid, address)) in breakpoints_pending_reinstall
+                        .clone()
+                        .iter()
+                        .copied()
+                        .enumerate()
+                    {
                         if bp_pid != pid {
                             continue;
                         }
 
-                        let bp = debugger.breakpoints.iter_mut().find(|bp| bp.address == address).expect("Attempt to install breakpoint that has not been added");
+                        let bp = debugger
+                            .breakpoints
+                            .iter_mut()
+                            .find(|bp| bp.address == address)
+                            .expect("Attempt to install breakpoint that has not been added");
                         bp.install(bp_pid);
                         println!("After installing bp = {:?}", bp);
                         breakpoints_pending_reinstall.remove(index);
@@ -390,13 +399,24 @@ impl DebuggingClient for LinuxPtraceDebuggingClient {
                                 debugger.breakpoints.push(bp);
                             }
                             Msg::RemoveBreakpoint(addr) => {
-                                let bp = debugger.breakpoints.iter_mut().find(|bp| bp.address == addr).expect("Removed breakpoint that doesnt exist");
+                                let bp = debugger
+                                    .breakpoints
+                                    .iter_mut()
+                                    .find(|bp| bp.address == addr)
+                                    .expect("Removed breakpoint that doesnt exist");
                                 bp.uninstall(pid);
-                                if let Some(bp_pos) = debugger.breakpoints.iter_mut().position(|bp| bp.address == addr) {
+                                if let Some(bp_pos) = debugger
+                                    .breakpoints
+                                    .iter_mut()
+                                    .position(|bp| bp.address == addr)
+                                {
                                     debugger.breakpoints.remove(bp_pos);
                                 }
 
-                                while let Some(pos) = breakpoints_pending_reinstall.iter().position(|(_, bp_addr)| *bp_addr == addr) {
+                                while let Some(pos) = breakpoints_pending_reinstall
+                                    .iter()
+                                    .position(|(_, bp_addr)| *bp_addr == addr)
+                                {
                                     breakpoints_pending_reinstall.remove(pos);
                                 }
                             }
@@ -431,7 +451,8 @@ impl DebuggingClient for LinuxPtraceDebuggingClient {
                     match evt {
                         PtraceEvent::SyscallEnter => {
                             // If we can get a call stack, forward that to the ui
-                            if let Ok(call_stack) = LinuxPtraceDebuggingClient::get_call_stack(pid) {
+                            if let Ok(call_stack) = LinuxPtraceDebuggingClient::get_call_stack(pid)
+                            {
                                 send_from_debug
                                     .send(DebuggerMsg::CallStack(pid, call_stack))
                                     .expect("Send fail");
@@ -439,10 +460,9 @@ impl DebuggingClient for LinuxPtraceDebuggingClient {
 
                             let user_regs = pid.ptrace_getregs();
                             // Figure out the details of the syscall
-                            let syscall_desc =
-                                LinuxPtraceDebuggingClient::get_syscall_description(
-                                    pid, &user_regs,
-                                );
+                            let syscall_desc = LinuxPtraceDebuggingClient::get_syscall_description(
+                                pid, &user_regs,
+                            );
                             send_from_debug
                                 .send(DebuggerMsg::Syscall(pid, syscall_desc))
                                 .expect("Send fail");
@@ -456,15 +476,13 @@ impl DebuggingClient for LinuxPtraceDebuggingClient {
                         }
                         PtraceEvent::Exit(exit_status) => {
                             // If we can get a call stack, forward that to the ui
-                            if let Ok(call_stack) = LinuxPtraceDebuggingClient::get_call_stack(pid) {
-                                send_from_debug
-                                    .send(DebuggerMsg::CallStack(pid, call_stack));
+                            if let Ok(call_stack) = LinuxPtraceDebuggingClient::get_call_stack(pid)
+                            {
+                                send_from_debug.send(DebuggerMsg::CallStack(pid, call_stack));
                             }
 
                             // If we can get a memory map for the process
-                            if let Some(mmap) =
-                            LinuxPtraceDebuggingClient::get_memory_map(pid)
-                            {
+                            if let Some(mmap) = LinuxPtraceDebuggingClient::get_memory_map(pid) {
                                 send_from_debug
                                     .send(DebuggerMsg::MemoryMap(pid, mmap))
                                     .expect("Send fail");
@@ -481,14 +499,9 @@ impl DebuggingClient for LinuxPtraceDebuggingClient {
                             let fp_regs = pid.ptrace_getfpregs();
 
                             let user_regs_ui =
-                                LinuxPtraceDebuggingClient::convert_ptrace_registers(
-                                    &user_regs,
-                                );
+                                LinuxPtraceDebuggingClient::convert_ptrace_registers(&user_regs);
                             send_from_debug
-                                .send(DebuggerMsg::UserRegisters(
-                                    pid,
-                                    user_regs_ui.clone(),
-                                ))
+                                .send(DebuggerMsg::UserRegisters(pid, user_regs_ui.clone()))
                                 .expect("Send fail");
                             send_from_debug
                                 .send(DebuggerMsg::FpRegisters(pid, fp_regs.clone()))
@@ -533,15 +546,13 @@ impl DebuggingClient for LinuxPtraceDebuggingClient {
                         }
                         PtraceEvent::Trap => {
                             // If we can get a call stack, forward that to the ui
-                            if let Ok(call_stack) = LinuxPtraceDebuggingClient::get_call_stack(pid) {
-                                send_from_debug
-                                    .send(DebuggerMsg::CallStack(pid, call_stack));
+                            if let Ok(call_stack) = LinuxPtraceDebuggingClient::get_call_stack(pid)
+                            {
+                                send_from_debug.send(DebuggerMsg::CallStack(pid, call_stack));
                             }
 
                             // If we can get a memory map for the process
-                            if let Some(mmap) =
-                            LinuxPtraceDebuggingClient::get_memory_map(pid)
-                            {
+                            if let Some(mmap) = LinuxPtraceDebuggingClient::get_memory_map(pid) {
                                 send_from_debug
                                     .send(DebuggerMsg::MemoryMap(pid, mmap))
                                     .expect("Send fail");
@@ -558,14 +569,9 @@ impl DebuggingClient for LinuxPtraceDebuggingClient {
                             let fp_regs = pid.ptrace_getfpregs();
 
                             let user_regs_ui =
-                                LinuxPtraceDebuggingClient::convert_ptrace_registers(
-                                    &user_regs,
-                                );
+                                LinuxPtraceDebuggingClient::convert_ptrace_registers(&user_regs);
                             send_from_debug
-                                .send(DebuggerMsg::UserRegisters(
-                                    pid,
-                                    user_regs_ui.clone(),
-                                ))
+                                .send(DebuggerMsg::UserRegisters(pid, user_regs_ui.clone()))
                                 .expect("Send fail");
                             send_from_debug
                                 .send(DebuggerMsg::FpRegisters(pid, fp_regs.clone()))
@@ -583,15 +589,13 @@ impl DebuggingClient for LinuxPtraceDebuggingClient {
                                 .expect("Faeild to send from debug");
 
                             // If we can get a call stack, forward that to the ui
-                            if let Ok(call_stack) = LinuxPtraceDebuggingClient::get_call_stack(pid) {
-                                send_from_debug
-                                    .send(DebuggerMsg::CallStack(pid, call_stack));
+                            if let Ok(call_stack) = LinuxPtraceDebuggingClient::get_call_stack(pid)
+                            {
+                                send_from_debug.send(DebuggerMsg::CallStack(pid, call_stack));
                             }
 
                             // If we can get a memory map for the process
-                            if let Some(mmap) =
-                            LinuxPtraceDebuggingClient::get_memory_map(pid)
-                            {
+                            if let Some(mmap) = LinuxPtraceDebuggingClient::get_memory_map(pid) {
                                 send_from_debug
                                     .send(DebuggerMsg::MemoryMap(pid, mmap))
                                     .expect("Send fail");
@@ -602,14 +606,9 @@ impl DebuggingClient for LinuxPtraceDebuggingClient {
                             let fp_regs = pid.ptrace_getfpregs();
 
                             let user_regs_ui =
-                                LinuxPtraceDebuggingClient::convert_ptrace_registers(
-                                    &user_regs,
-                                );
+                                LinuxPtraceDebuggingClient::convert_ptrace_registers(&user_regs);
                             send_from_debug
-                                .send(DebuggerMsg::UserRegisters(
-                                    pid,
-                                    user_regs_ui.clone(),
-                                ))
+                                .send(DebuggerMsg::UserRegisters(pid, user_regs_ui.clone()))
                                 .expect("Send fail");
                             send_from_debug
                                 .send(DebuggerMsg::FpRegisters(pid, fp_regs.clone()))
@@ -666,13 +665,24 @@ impl DebuggingClient for LinuxPtraceDebuggingClient {
                                 debugger.breakpoints.push(bp);
                             }
                             Msg::RemoveBreakpoint(addr) => {
-                                let bp = debugger.breakpoints.iter_mut().find(|bp| bp.address == addr).expect("Removed breakpoint that doesnt exist");
+                                let bp = debugger
+                                    .breakpoints
+                                    .iter_mut()
+                                    .find(|bp| bp.address == addr)
+                                    .expect("Removed breakpoint that doesnt exist");
                                 bp.uninstall(pid);
-                                if let Some(bp_pos) = debugger.breakpoints.iter_mut().position(|bp| bp.address == addr) {
+                                if let Some(bp_pos) = debugger
+                                    .breakpoints
+                                    .iter_mut()
+                                    .position(|bp| bp.address == addr)
+                                {
                                     debugger.breakpoints.remove(bp_pos);
                                 }
 
-                                while let Some(pos) = breakpoints_pending_reinstall.iter().position(|(_, bp_addr)| *bp_addr == addr) {
+                                while let Some(pos) = breakpoints_pending_reinstall
+                                    .iter()
+                                    .position(|(_, bp_addr)| *bp_addr == addr)
+                                {
                                     breakpoints_pending_reinstall.remove(pos);
                                 }
                             }
@@ -682,7 +692,7 @@ impl DebuggingClient for LinuxPtraceDebuggingClient {
 
                     pid.ptrace_syscall();
 
-                   /* println!("Waiting for msg");
+                    /* println!("Waiting for msg");
                     loop {
                         //let msg = reciever.recv().expect("No continue");
                         let msg = Msg::Continue;

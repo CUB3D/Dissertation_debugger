@@ -93,15 +93,10 @@ impl InnerRender for WidgetRegisters {
                                 0b01 => "zero",
                                 0b10 => "special",
                                 0b11 => "Empty",
-                                _ => "Unknown"
+                                _ => "Unknown",
                             };
 
-                            ui.text(format!(
-                                "x87TW_{}: {} ({})",
-                                ii,
-                                v,
-                                desc
-                            ));
+                            ui.text(format!("x87TW_{}: {} ({})", ii, v, desc));
                         }
 
                         //TODO: x87 status word + control word + mxcsr
@@ -132,7 +127,6 @@ impl InnerRender for WidgetRegisters {
                         }
                         ui.new_line();
                     }
-
 
                     if state.cache_user_regs.is_none() && state.cache_fp_regs.is_none() {
                         ui.text("No registers available yet!");

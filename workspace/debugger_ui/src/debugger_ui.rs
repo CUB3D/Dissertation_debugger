@@ -1,7 +1,7 @@
 use crate::breakpoints::WidgetBreakpoints;
+use crate::call_stack::WidgetCallStack;
 use crate::memory_map::WidgetMemoryMap;
 use crate::registers::WidgetRegisters;
-use crate::call_stack::WidgetCallStack;
 use crate::{debugger_ui, DebuggerState};
 
 use crate::child_process::WidgetChildProcesses;
@@ -115,7 +115,7 @@ impl DebuggerUi {
 
 pub mod widget {
     use crate::debugger_ui::DebuggerState;
-    use imgui::{Ui};
+    use imgui::Ui;
 
     pub trait UiMenu {
         fn render_if_visible(&mut self, state: &mut DebuggerState, ui: &Ui) {
