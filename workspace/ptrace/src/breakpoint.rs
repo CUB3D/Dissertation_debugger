@@ -1,4 +1,4 @@
-use crate::{Process};
+use crate::Process;
 
 /// Represent a single breakpoint
 #[derive(Debug, Copy, Clone)]
@@ -6,7 +6,7 @@ pub struct Breakpoint {
     /// The original value of the byte that this breakpoint replaced, None if the value is missing
     original_byte: Option<u8>,
     /// The address this breakpoint is attached to
-    pub address: usize
+    pub address: usize,
 }
 
 impl Breakpoint {
@@ -33,12 +33,19 @@ impl Breakpoint {
             // Path the instruction
             let patched_instruction = (original_instruction & 0xFFFF_FFFF_FFFF_FF00u64) | 0xCC;
             // Write the patched instruction to the text section
-            unsafe { libc::ptrace(libc::PTRACE_POKETEXT, child.0, self.address, patched_instruction) };
+            unsafe {
+                libc::ptrace(
+                    libc::PTRACE_POKETEXT,
+                    child.0,
+                    self.address,
+                    patched_instruction,
+                )
+            };
             // println!("Installed bp @ 0x{:x}", self.address);
             true
         } else {
             false
-        }
+        };
     }
 
     /// Uninstall the breakpoint from the target
@@ -47,17 +54,26 @@ impl Breakpoint {
     pub fn uninstall(&mut self, child: Process) -> bool {
         return if let Some(original_byte) = self.original_byte {
             // Get the modified instruction that contains int3 at start
-            let original_instruction = unsafe { libc::ptrace(libc::PTRACE_PEEKTEXT, child, self.address, 0) } as u64;
+            let original_instruction =
+                unsafe { libc::ptrace(libc::PTRACE_PEEKTEXT, child, self.address, 0) } as u64;
             // Put the original byte that was overwritten with int3 back
-            let patched_instruction = (original_instruction & 0xFFFF_FFFF_FFFF_FF00u64) | (original_byte as u64);
+            let patched_instruction =
+                (original_instruction & 0xFFFF_FFFF_FFFF_FF00u64) | (original_byte as u64);
             // Put the instruction back in the binary
-            unsafe { libc::ptrace(libc::PTRACE_POKETEXT, child, self.address, patched_instruction) };
+            unsafe {
+                libc::ptrace(
+                    libc::PTRACE_POKETEXT,
+                    child,
+                    self.address,
+                    patched_instruction,
+                )
+            };
 
             self.original_byte = None;
 
             true
         } else {
             false
-        }
+        };
     }
 }

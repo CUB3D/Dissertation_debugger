@@ -1,5 +1,5 @@
-use std::collections::HashMap;
 use crate::{Breakpoint, Process, Ptrace};
+use std::collections::HashMap;
 
 /// Events that can be emitted during debugging a process
 #[derive(Debug, Clone)]
@@ -53,10 +53,9 @@ impl EventDrivenPtraceDebugger {
         let (pid, status) = loop {
             let (pid, status) = Process::wait_any();
             if self.processes.contains(&pid) {
-               break (pid, status);
+                break (pid, status);
             }
         };
-
 
         if status.wifstopped() {
             // Handle the various trap types
@@ -87,7 +86,11 @@ impl EventDrivenPtraceDebugger {
                             .expect("Hit a breakpoint, but we can't find it to uninstall");
                         println!("Before uninstall bp = {:?}", bp);*/
 
-                        let bp = self.breakpoints.iter_mut().find(|bp| bp.address == user_regs.ip as usize - 1).expect("Hit a breakpoint, but we can't find it to uninstall");
+                        let bp = self
+                            .breakpoints
+                            .iter_mut()
+                            .find(|bp| bp.address == user_regs.ip as usize - 1)
+                            .expect("Hit a breakpoint, but we can't find it to uninstall");
                         bp.uninstall(pid);
                         // Go back to the start of the original instruction so it actually gets executed
                         unsafe {
@@ -124,7 +127,9 @@ impl EventDrivenPtraceDebugger {
                         }
                         libc::PTRACE_EVENT_EXIT => {
                             let exit_status = pid.ptrace_geteventmsg();
-                            if let Some(child_pos) = self.processes.iter().position(|child| *child == pid) {
+                            if let Some(child_pos) =
+                                self.processes.iter().position(|child| *child == pid)
+                            {
                                 self.processes.remove(child_pos);
                             }
                             return (pid, PtraceEvent::Exit(exit_status as isize));

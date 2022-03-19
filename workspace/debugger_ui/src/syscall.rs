@@ -1,7 +1,7 @@
 use crate::debugger_ui::widget::{InnerRender, UiMenu};
 use crate::{define_ui_menu, DebuggerState};
-use imgui::{Ui, Window};
 use debugger_core::SyscallArg;
+use imgui::{Ui, Window};
 
 #[derive(Default)]
 pub struct WidgetSyscallList {
@@ -14,7 +14,6 @@ impl InnerRender for WidgetSyscallList {
         if let Some(tab_bar) = ui.tab_bar("SyscallHistory") {
             for state in &state.process_state {
                 if let Some(tab) = ui.tab_item(format!("Syscall History ({})", state.process.0)) {
-
                     for syscall in &state.syscall_list {
                         ui.text(&syscall.name);
                         ui.same_line();
@@ -26,7 +25,8 @@ impl InnerRender for WidgetSyscallList {
                                 SyscallArg::FileDescriptor(fd) => ui.text(format!("{}", fd)),
                                 SyscallArg::ProcessId(pid) => ui.text(format!("{}", pid)),
                                 SyscallArg::FilePath(path) => {
-                                    if let Some(file_name) = std::path::Path::new(path).file_name() {
+                                    if let Some(file_name) = std::path::Path::new(path).file_name()
+                                    {
                                         ui.text(format!("\"{}\"", file_name.to_string_lossy()))
                                     } else {
                                         ui.text(format!("\"{}\"", path))

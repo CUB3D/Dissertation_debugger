@@ -2,28 +2,28 @@
 
 #[cfg(target_os = "linux")]
 pub use linux_ptrace::*;
+#[cfg(all(target_os = "linux", feature = "breakpoints"))]
+pub mod breakpoint;
+pub mod event_debugger;
 #[cfg(target_os = "linux")]
 pub mod process;
-#[cfg(all(target_os = "linux", feature="breakpoints"))]
-pub mod breakpoint;
 #[cfg(target_os = "linux")]
 pub mod types;
-pub mod event_debugger;
 
+#[cfg(all(target_os = "linux", feature = "breakpoints"))]
+pub use breakpoint::*;
+#[cfg(target_os = "linux")]
+pub use linux_memory_map::*;
 #[cfg(target_os = "linux")]
 pub use process::*;
 #[cfg(target_os = "linux")]
 pub use types::*;
-#[cfg(all(target_os = "linux", feature="breakpoints"))]
-pub use breakpoint::*;
-#[cfg(target_os = "linux")]
-pub use linux_memory_map::*;
 
 #[cfg(target_os = "linux")]
 mod linux_ptrace {
     use crate::process::Process;
-    use std::ffi::CString;
     use std::error::Error;
+    use std::ffi::CString;
 
     /// Read a null-terminated (cstring) from the process `child` at address `addr`,
     /// # Safety
@@ -60,7 +60,6 @@ mod linux_ptrace {
     impl Ptrace {
         /// Create a new instance of `Ptrace`
         pub fn new(process: &str, process_name: &str, args: &[&str]) -> PTraceResult<Self> {
-
             let mut cargs = Vec::new();
             cargs.push(CString::new(process_name)?);
             for a in args {
@@ -93,17 +92,32 @@ mod linux_ptrace {
                 pointers.push(core::ptr::null_mut() as *const _);
 
                 // Spawn the child
-                let r = unsafe { libc::execv(self.process.as_ptr(),  pointers.as_ptr()) };
+                let r = unsafe { libc::execv(self.process.as_ptr(), pointers.as_ptr()) };
 
                 // Note: this drop forces the vec to not be dropped until after the evecv finishes, which will never happen if it works
                 drop(pointers);
-                panic!("Failed to start subprocess: {} {}", r, unsafe { *libc::__errno_location() });
+                panic!("Failed to start subprocess: {} {}", r, unsafe {
+                    *libc::__errno_location()
+                });
             }
 
             // Wait for the new process to start
             child_proc.wait_for();
 
-            unsafe { libc::ptrace(libc::PTRACE_SETOPTIONS, child, 0, libc::PTRACE_O_EXITKILL | libc::PTRACE_O_TRACESYSGOOD | libc::PTRACE_O_TRACECLONE | libc::PTRACE_O_TRACEEXEC | libc::PTRACE_O_TRACEFORK | libc::PTRACE_O_TRACEVFORK | libc::PTRACE_O_TRACEEXIT) };
+            unsafe {
+                libc::ptrace(
+                    libc::PTRACE_SETOPTIONS,
+                    child,
+                    0,
+                    libc::PTRACE_O_EXITKILL
+                        | libc::PTRACE_O_TRACESYSGOOD
+                        | libc::PTRACE_O_TRACECLONE
+                        | libc::PTRACE_O_TRACEEXEC
+                        | libc::PTRACE_O_TRACEFORK
+                        | libc::PTRACE_O_TRACEVFORK
+                        | libc::PTRACE_O_TRACEEXIT,
+                )
+            };
 
             child_proc
         }

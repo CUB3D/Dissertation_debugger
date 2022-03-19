@@ -1,8 +1,8 @@
 use crate::debugger_ui::widget::{InnerRender, UiMenu};
 use crate::{define_ui_menu, DebuggerState};
-use imgui::{Ui, Window};
-use debugger_core::Msg;
 use debugger_core::debugger_state::DebuggerStatus;
+use debugger_core::Msg;
+use imgui::{Ui, Window};
 
 pub struct WidgetControls {
     pub visible: bool,
@@ -21,7 +21,10 @@ impl InnerRender for WidgetControls {
             return;
         }
 
-        if state.status == DebuggerStatus::Running || state.status == DebuggerStatus::Dead || state.status == DebuggerStatus::Breakpoint {
+        if state.status == DebuggerStatus::Running
+            || state.status == DebuggerStatus::Dead
+            || state.status == DebuggerStatus::Breakpoint
+        {
             // Restart button, only shown when a process is currently running
             if ui.small_button("Restart") {
                 state
@@ -42,11 +45,13 @@ impl InnerRender for WidgetControls {
                     .send(Msg::Stop)
                     .expect("Failed to send msg");
             }
-
         }
 
         //Continue button, only shown when paused on a breakpoint or waiting to start
-        if state.status == DebuggerStatus::ReadyToStart ||  state.status == DebuggerStatus::Breakpoint || state.status == DebuggerStatus::Paused {
+        if state.status == DebuggerStatus::ReadyToStart
+            || state.status == DebuggerStatus::Breakpoint
+            || state.status == DebuggerStatus::Paused
+        {
             if ui.small_button("Continue") {
                 state.send_msg(Msg::Continue);
             }
