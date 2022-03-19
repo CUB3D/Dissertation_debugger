@@ -30,7 +30,7 @@ impl InnerRender for WidgetMemoryView {
                     ) {
                         let mut hit_first_visisble = false;
                         let mut hit_last_visisble = false;
-                        'memory_sections: for (mem, mem_range) in &state.memory {
+                        for (mem, mem_range) in &state.memory {
                             for (i, c) in mem.chunks(16).enumerate() {
                                 ui.table_next_column();
 

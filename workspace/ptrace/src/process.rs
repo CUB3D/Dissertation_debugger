@@ -2,10 +2,6 @@
 
 use crate::types::{FpRegs, UserRegs, WaitStatus};
 
-enum PtraceError {
-    Unknown,
-}
-
 /// A process identifier (pid)
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
 pub struct Process(pub i32);
