@@ -100,7 +100,7 @@ impl InnerRender for WidgetDisassemble {
                     ));
                 }
 
-                for (virt_addr, section_data, name) in &sections {
+                for (virt_addr, section_data, _name) in &sections {
                     let mut decoder = Decoder::with_ip(
                         64,
                         section_data,

@@ -4,20 +4,20 @@ use crate::types::{CallStack, StackFrame};
 use crate::DebuggingClient;
 use crate::{DebuggerMsg, Msg};
 use crossbeam_channel::{unbounded, Receiver, Sender};
-use std::collections::HashMap;
+
 use std::error::Error;
 use std::io::{Read, Seek, SeekFrom};
 
-use ptrace::{Breakpoint, Process, Ptrace};
+use ptrace::{Process};
 
 use std::iter::Iterator;
 use std::ops::Range;
 use std::sync::{Arc, RwLock};
-use std::time::Duration;
+
 
 use crate::types::{MemoryMap, MemoryMapEntry, MemoryMapEntryPermissions};
 use crate::types::{Syscall, SyscallArg};
-use crate::DebuggerState;
+
 use ptrace::event_debugger::{EventDrivenPtraceDebugger, PtraceEvent};
 use unwind::{Accessors, AddressSpace, Byteorder, Cursor as StackCursor, PTraceState, RegNum};
 
@@ -290,8 +290,8 @@ impl DebuggingClient for LinuxPtraceDebuggingClient {
         let args = args.iter().map(|s| s.to_string()).collect::<Vec<_>>();
 
         //TODO: massive hack, pls no
-        let mut control_messages: Arc<RwLock<Vec<Msg>>> = Arc::new(RwLock::new(Vec::new()));
-        let mut state_messages: Arc<RwLock<Vec<Msg>>> = Arc::new(RwLock::new(Vec::new()));
+        let control_messages: Arc<RwLock<Vec<Msg>>> = Arc::new(RwLock::new(Vec::new()));
+        let state_messages: Arc<RwLock<Vec<Msg>>> = Arc::new(RwLock::new(Vec::new()));
 
         let control_messages_local = Arc::clone(&control_messages);
         let state_messages_local = Arc::clone(&state_messages);
