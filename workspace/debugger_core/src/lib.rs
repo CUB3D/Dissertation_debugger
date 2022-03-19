@@ -87,8 +87,6 @@ pub enum DebuggerMsg {
     /// InstallBreakpoint, however this must be done after executing past this point
     /// or it will be hit in a loop.
     BPTrap { breakpoint: Breakpoint },
-    /// The child has hit a syscall breakpoint, control returned to caller
-    SyscallTrap,
     /// The process has spawned
     ProcessSpawn(Process),
     /// The given process has died with the given status
