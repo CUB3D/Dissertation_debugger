@@ -41,7 +41,6 @@ impl InnerRender for WidgetControls {
                     .unwrap()
                     .send(Msg::Stop)
                     .expect("Failed to send msg");
-                state.started = false;
             }
 
         }

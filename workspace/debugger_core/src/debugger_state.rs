@@ -94,11 +94,7 @@ pub struct DebuggerState {
     pub process: Option<Process>,
     pub process_state: Vec<ProcessState>,
     pub elf: Option<BinaryFile>,
-    pub auto_step: bool,
-    pub single_step_mode: bool,
-    pub started: bool,
     pub current_breakpoint: Option<Breakpoint>,
-    pub halt_reason: String,
     pub status: DebuggerStatus,
     //TODO: group these three together, if we have one we should have all
     pub sender: Option<Sender<Msg>>,
@@ -108,9 +104,6 @@ pub struct DebuggerState {
 
 impl DebuggerState {
     pub fn load_binary(&mut self, binary: &str) {
-        //TODO: do with default
-        self.auto_step = true;
-
         let binary_content = std::fs::read(&binary).expect("Failed to read binary");
 
         // if let Ok(fr) = fat_macho::FatReader::new(&binary_content) {
@@ -144,7 +137,6 @@ impl DebuggerState {
         self.reciever = Some(reciever);
 
         self.status = DebuggerStatus::ReadyToStart;
-        self.started = true;
     }
 
     pub fn process_incoming_message(&mut self) {
@@ -156,23 +148,9 @@ impl DebuggerState {
         {
             match msg {
                 DebuggerMsg::Trap => {
-                    self.halt_reason = "Trap".to_string();
                     self.status = DebuggerStatus::Paused;
                 }
-                DebuggerMsg::SyscallTrap => {
-                    self.halt_reason = "Syscall Trap".to_string();
-                    self.sender.as_ref().unwrap().send(Msg::Continue);
-                    self.sender.as_ref().unwrap().send(Msg::Continue);
-
-                    /*if self.auto_step {
-                        //TODO: shouldnt have to do this, not handling syscall enter/exit properly
-                        self.sender.as_ref().unwrap().send(Msg::Continue);
-                        self.sender.as_ref().unwrap().send(Msg::Continue);
-                    }*/
-                }
                 DebuggerMsg::BPTrap { breakpoint } => {
-                    self.halt_reason = format!("Breakpoint hit @ {:X}", breakpoint.address);
-
                     // int3 never auto continues
                     self.current_breakpoint = Some(breakpoint);
                     self.status = DebuggerStatus::Breakpoint;
@@ -192,13 +170,9 @@ impl DebuggerState {
 
                     self.process = Some(p);
                     self.process_state.push(ProcessState::with_process(p));
-                    self.halt_reason = "Process Started".to_string();
                 }
                 DebuggerMsg::ChildProcessSpawn(p) => {
                     self.process_state.push(ProcessState::with_process(p));
-                    // TODO: hack here, we send this 2 times, onece for the new child, once for the parent
-                    // self.sender.as_ref().unwrap().send(Msg::Continue);
-                    // self.sender.as_ref().unwrap().send(Msg::Continue);
                 }
                 DebuggerMsg::CallStack(pid, cs) => {
                     println!("callstack {:?} {:?}", pid, cs);
@@ -253,12 +227,9 @@ impl DebuggerState {
                         .expect("No process to mark dead")
                         .alive = false;
 
-                    self.halt_reason = format!("Process died, pid = {}", pid.0);
-
                     //println!("Proc death, pid = {:?}, status = {:?}", pid, status);
 
                     if !self.process_state.first().unwrap().alive {
-                        self.halt_reason = format!("parent died");
                         self.status = DebuggerStatus::Dead;
                     }
                 }
