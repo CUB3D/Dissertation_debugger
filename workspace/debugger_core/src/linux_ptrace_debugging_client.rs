@@ -61,6 +61,13 @@ impl LinuxPtraceDebuggingClient {
         Ok(CallStack(call_stack))
     }
 
+    #[cfg(target_arch = "aarch64")]
+    fn convert_ptrace_registers(oregs: &Box<ptrace::UserRegs>) -> Box<crate::types::UserRegs> {
+        let mut regs = Box::<crate::types::UserRegs>::default();
+        regs
+    }
+
+    #[cfg(target_arch = "x86_64")]
     //TODO: idea: make this struct repr(c) then we can cast easily
     fn convert_ptrace_registers(oregs: &Box<ptrace::UserRegs>) -> Box<crate::types::UserRegs> {
         let mut regs = Box::<crate::types::UserRegs>::default();
@@ -155,6 +162,15 @@ impl LinuxPtraceDebuggingClient {
         None
     }
 
+    #[cfg(target_arch = "aarch64")]
+    fn get_syscall_description(pid: Process, user_regs: &Box<ptrace::UserRegs>) -> Syscall {
+        Syscall {
+            name: "Unknown".to_string(),
+            args: vec![]
+        }
+    }
+
+    #[cfg(target_arch = "x86_64")]
     /// Convert the register state from a syscall trap into a syscall event for the ui
     fn get_syscall_description(pid: Process, user_regs: &Box<ptrace::UserRegs>) -> Syscall {
         macro_rules! syscall {
@@ -447,6 +463,26 @@ impl DebuggingClient for LinuxPtraceDebuggingClient {
                         }
                     }
 
+                    macro_rules! send_regs {
+                        () => {
+                            #[cfg(target_arch = "x86_64")]
+                            {
+                            // Try and send regs
+                            let user_regs = pid.ptrace_getregs();
+                            let fp_regs = pid.ptrace_getfpregs();
+
+                            let user_regs_ui =
+                                LinuxPtraceDebuggingClient::convert_ptrace_registers(&user_regs);
+                            send_from_debug
+                                .send(DebuggerMsg::UserRegisters(pid, user_regs_ui.clone()))
+                                .expect("Send fail");
+                            send_from_debug
+                                .send(DebuggerMsg::FpRegisters(pid, fp_regs.clone()))
+                                .expect("Send fail");
+                            }
+                        };
+                    }
+
                     //println!("Got ptrace evt: {:?} @ {:?}", evt, pid);
                     match evt {
                         PtraceEvent::SyscallEnter => {
@@ -494,18 +530,6 @@ impl DebuggingClient for LinuxPtraceDebuggingClient {
                                 .send(DebuggerMsg::Memory(pid, memory))
                                 .expect("Send fail");
 
-                            // Try and send regs
-                            let user_regs = pid.ptrace_getregs();
-                            let fp_regs = pid.ptrace_getfpregs();
-
-                            let user_regs_ui =
-                                LinuxPtraceDebuggingClient::convert_ptrace_registers(&user_regs);
-                            send_from_debug
-                                .send(DebuggerMsg::UserRegisters(pid, user_regs_ui.clone()))
-                                .expect("Send fail");
-                            send_from_debug
-                                .send(DebuggerMsg::FpRegisters(pid, fp_regs.clone()))
-                                .expect("Send fail");
 
                             println!(
                                 "child {:?} exit with status {}, assuming finished",
@@ -564,18 +588,7 @@ impl DebuggingClient for LinuxPtraceDebuggingClient {
                                 .send(DebuggerMsg::Memory(pid, memory))
                                 .expect("Send fail");
 
-                            // Try and send regs
-                            let user_regs = pid.ptrace_getregs();
-                            let fp_regs = pid.ptrace_getfpregs();
-
-                            let user_regs_ui =
-                                LinuxPtraceDebuggingClient::convert_ptrace_registers(&user_regs);
-                            send_from_debug
-                                .send(DebuggerMsg::UserRegisters(pid, user_regs_ui.clone()))
-                                .expect("Send fail");
-                            send_from_debug
-                                .send(DebuggerMsg::FpRegisters(pid, fp_regs.clone()))
-                                .expect("Send fail");
+                            send_regs!();
 
                             send_from_debug
                                 .send(DebuggerMsg::Trap)
@@ -601,18 +614,7 @@ impl DebuggingClient for LinuxPtraceDebuggingClient {
                                     .expect("Send fail");
                             }
 
-                            // Try and send regs
-                            let user_regs = pid.ptrace_getregs();
-                            let fp_regs = pid.ptrace_getfpregs();
-
-                            let user_regs_ui =
-                                LinuxPtraceDebuggingClient::convert_ptrace_registers(&user_regs);
-                            send_from_debug
-                                .send(DebuggerMsg::UserRegisters(pid, user_regs_ui.clone()))
-                                .expect("Send fail");
-                            send_from_debug
-                                .send(DebuggerMsg::FpRegisters(pid, fp_regs.clone()))
-                                .expect("Send fail");
+                            send_regs!();
 
                             // Try and send memory state
                             let memory = LinuxPtraceDebuggingClient::get_memory(pid);
@@ -691,54 +693,6 @@ impl DebuggingClient for LinuxPtraceDebuggingClient {
                     }
 
                     pid.ptrace_syscall();
-
-                    /* println!("Waiting for msg");
-                    loop {
-                        //let msg = reciever.recv().expect("No continue");
-                        let msg = Msg::Continue;
-                        println!("Got msg {:?}", msg);
-                        local_debugger_state
-                            .apply_state_transform(msg.clone());
-                        match msg {
-                            Msg::Continue => break,
-                            Msg::AddBreakpoint(bp) => {
-                                //TODO: does this work with bp on other threads?
-                                // let bp2 = local_debugger_state
-                                //     .breakpoints
-                                //     .last_mut()
-                                //     .unwrap();
-                                // let success = bp2.install(child);
-
-                                debugger.breakpoints.push(bp);
-                                debugger.breakpoints.last_mut().unwrap().install(child);
-                            }
-                            Msg::DoSingleStep => {
-                                pid.ptrace_singlestep();
-                                continue 'big_exit;
-                            }
-                            Msg::InstallBreakpoint { address } => {
-                                let bp = debugger.breakpoints.iter_mut().find(|bp| bp.address == address).expect("Attempt to install breakpoint that has not been added");
-                                bp.install(child);
-                            }
-                            Msg::RemoveBreakpoint(baddr) => {
-                                let bp = debugger.breakpoints.iter_mut().find(|bp| bp.address == baddr).expect("Attempt to remove breakpoint that has not been added");
-                                bp.uninstall(child);
-                            }
-                            Msg::Restart => {
-                                // TODO: check that child is dead first / kill if needed
-                                child = debugger.start();
-
-                                send_from_debug
-                                    .send(DebuggerMsg::ProcessSpawn(child))
-                                    .expect("Send proc");
-                                continue 'debug_loop;
-                            }
-                            Msg::Stop => {
-                                child.sigstop();
-                                // panic!("Unimplemented: stop msg");
-                            }
-                        }
-                    }*/
                 }
             }
         });
