@@ -62,9 +62,8 @@ impl LinuxPtraceDebuggingClient {
     }
 
     #[cfg(target_arch = "aarch64")]
-    fn convert_ptrace_registers(oregs: &Box<ptrace::UserRegs>) -> Box<crate::types::UserRegs> {
-        let mut regs = Box::<crate::types::UserRegs>::default();
-        regs
+    fn convert_ptrace_registers(oregs: &Box<ptrace::UserRegs>) -> Box<ptrace::UserRegs> {
+        oregs.clone()
     }
 
     #[cfg(target_arch = "x86_64")]
@@ -480,6 +479,18 @@ impl DebuggingClient for LinuxPtraceDebuggingClient {
                                 .send(DebuggerMsg::FpRegisters(pid, fp_regs.clone()))
                                 .expect("Send fail");
                             }
+
+                            #[cfg(target_arch = "aarch64")]
+                            {
+                            // Try and send regs
+                            let user_regs = pid.ptrace_getregs();
+
+                            let user_regs_ui =
+                                LinuxPtraceDebuggingClient::convert_ptrace_registers(&user_regs);
+                            send_from_debug
+                                .send(DebuggerMsg::UserRegisters(pid, user_regs_ui.clone()))
+                                .expect("Send fail");
+                            }
                         };
                     }
 
@@ -530,6 +541,7 @@ impl DebuggingClient for LinuxPtraceDebuggingClient {
                                 .send(DebuggerMsg::Memory(pid, memory))
                                 .expect("Send fail");
 
+                            send_regs!();
 
                             println!(
                                 "child {:?} exit with status {}, assuming finished",

@@ -19,6 +19,16 @@ impl InnerRender for WidgetRegisters {
         if let Some(tab_bar) = ui.tab_bar("Registers") {
             for state in &mut state.process_state {
                 if let Some(tab) = ui.tab_item(format!("Registers ({})", state.process.0)) {
+                    #[cfg(target_arch = "aarch64")]
+                    if let Some(user_regs) = &state.cache_user_regs {
+                        ui.text(format!("PC: 0x{:X} ({})", user_regs.pc, user_regs.pc));
+                        ui.text(format!("SP: 0x{:X} ({})", user_regs.sp, user_regs.sp));
+
+                        for (index, reg) in user_regs.regs.iter().copied().enumerate() {
+                            ui.text(format!("x{}: 0x{:X} ({})", index, reg, reg));
+                        }
+                    }
+                    #[cfg(target_arch = "x86_64")]
                     if let Some(user_regs) = &state.cache_user_regs {
                         // General registers
                         ui.text(format!("RAX: 0x{:X} ({})", user_regs.ax, user_regs.ax));
