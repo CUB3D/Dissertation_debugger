@@ -1,3 +1,15 @@
+#[cfg(target_arch = "aarch64")]
+/// Translated to rust from <arch/aarch64/include/uapi/asm/ptrace.h> user_pt_regs
+#[derive(Default, Copy, Clone, Debug, Eq, PartialEq)]
+#[repr(C)]
+pub struct UserRegs {
+    pub regs: [u64; 31],
+    pub sp: u64,
+    pub pc: u64,
+    pub pstate: u64,
+}
+
+#[cfg(target_arch = "x86_64")]
 /// Translated to rust from <arch/x86/include/asm/user_64.h>
 #[derive(Default, Copy, Clone, Debug, Eq, PartialEq)]
 #[repr(C)]

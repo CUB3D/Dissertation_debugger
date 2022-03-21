@@ -13,7 +13,7 @@ goblin = { version = "0.5.1", default-features=false, features=["endian_fd", "el
 linux_memory_map = { path = "../linux_memory_map" }
 
 [target.'cfg(target_os = "linux")'.dependencies]
-ptrace = { path = "../ptrace", features = ["breakpoints", "child_processes"]}
+ptrace = { path = "../ptrace", features = ["breakpoints", "event_debugger"]}
 unwind = {version = "0.4.0", features=["ptrace"]}
 
 [target.'cfg(target_os = "macos")'.dependencies]

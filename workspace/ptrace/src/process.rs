@@ -72,6 +72,7 @@ impl Process {
         msg
     }
 
+    #[cfg(target_arch = "x86_64")]
     /// Get the user registers of the process
     pub fn ptrace_getregs(&self) -> Box<UserRegs> {
         let mut regs = Box::<UserRegs>::default();
@@ -80,6 +81,21 @@ impl Process {
         regs
     }
 
+    #[cfg(target_arch = "aarch64")]
+    /// Get the user registers of the process
+    pub fn ptrace_getregs(&self) -> Box<UserRegs> {
+        let mut regs = unsafe { Box::<UserRegs>::new_zeroed().assume_init() };
+
+        let mut iovec = unsafe { Box::<libc::iovec>::new_zeroed().assume_init() };
+        iovec.iov_base = regs.as_mut() as *mut UserRegs as *mut _;
+        iovec.iov_len = core::mem::size_of::<UserRegs>();
+
+        /*assert_ne!(-1, */
+        unsafe { libc::ptrace(libc::PTRACE_GETREGSET, self.0, libc::NT_PRSTATUS, iovec.as_mut() as *mut _) }; /*);*/
+        regs
+    }
+
+    #[cfg(target_arch = "x86_64")]
     /// Get the fp regs of the process
     pub fn ptrace_getfpregs(&self) -> Box<FpRegs> {
         let mut fpregs = unsafe { Box::<FpRegs>::new_zeroed().assume_init() };
@@ -88,6 +104,7 @@ impl Process {
         fpregs
     }
 
+    #[cfg(target_arch = "x86_64")]
     /// Set the user regs of the process
     pub fn ptrace_setregs(&mut self, regs: Box<UserRegs>) {
         assert_ne!(-1, unsafe {
@@ -95,6 +112,18 @@ impl Process {
         });
     }
 
+    #[cfg(target_arch = "aarch64")]
+    /// Get the user registers of the process
+    pub fn ptrace_setregs(&self, regs: &mut Box<UserRegs>) {
+        let mut iovec = unsafe { Box::<libc::iovec>::new_zeroed().assume_init() };
+        iovec.iov_base = regs.as_mut() as *mut UserRegs as *mut _;
+        iovec.iov_len = core::mem::size_of::<UserRegs>();
+
+        /*assert_ne!(-1, */
+        unsafe { libc::ptrace(libc::PTRACE_SETREGSET, self.0, libc::NT_PRSTATUS, iovec.as_mut() as *mut _) }; /*);*/
+    }
+
+    #[cfg(target_arch = "x86_64")]
     /// Set the fp regs of the process
     pub fn ptrace_setfpregs(&mut self, regs: Box<FpRegs>) {
         assert_ne!(-1, unsafe {
@@ -102,6 +131,7 @@ impl Process {
         });
     }
 
+    #[cfg(target_arch = "x86_64")]
     /// Get the original value of rax, this will contain the id of the syscall being executed on linux when a syscall trap event is raised
     pub fn ptrace_getreg_origrax(&self) -> i64 {
         unsafe { libc::ptrace(libc::PTRACE_PEEKUSER, self.0, 8 * libc::ORIG_RAX, 0) }

@@ -73,37 +73,53 @@ impl EventDrivenPtraceDebugger {
                 let event = status.0 >> 16;
 
                 if event == 0 {
-                    // We know we didnt hit a syscall but we might have hit a manual breakpoint, check if we hit a 0xcc
-                    let user_regs = pid.ptrace_getregs();
-                    if pid.ptrace_peektext(user_regs.ip as usize - 1) & 0xFF == 0xCC {
-                        /*let bp = self.breakpoints
-                            .get_mut(&pid)
-                            .map(|child_bps| {
-                                child_bps.iter_mut()
-                                    .find(|bp| bp.address == user_regs.ip as usize - 1)
-                            })
-                            .flatten()
-                            .expect("Hit a breakpoint, but we can't find it to uninstall");
-                        println!("Before uninstall bp = {:?}", bp);*/
 
-                        let bp = self
-                            .breakpoints
-                            .iter_mut()
-                            .find(|bp| bp.address == user_regs.ip as usize - 1)
-                            .expect("Hit a breakpoint, but we can't find it to uninstall");
-                        bp.uninstall(pid);
-                        // Go back to the start of the original instruction so it actually gets executed
-                        unsafe {
-                            libc::ptrace(
-                                libc::PTRACE_POKEUSER,
-                                pid,
-                                8 * libc::RIP,
-                                user_regs.ip - 1,
-                            )
-                        };
-                        return (pid, PtraceEvent::BreakpointHit(*bp));
-                    } else {
-                        return (pid, PtraceEvent::Trap);
+                    #[cfg(target_arch = "x86_64")]
+                    {
+                        // We know we didnt hit a syscall but we might have hit a manual breakpoint, check if we hit a 0xcc
+                        let user_regs = pid.ptrace_getregs();
+                        if pid.ptrace_peektext(user_regs.ip as usize - 1) & 0xFF == 0xCC {
+                            let bp = self
+                                .breakpoints
+                                .iter_mut()
+                                .find(|bp| bp.address == user_regs.ip as usize - 1)
+                                .expect("Hit a breakpoint, but we can't find it to uninstall");
+                            bp.uninstall(pid);
+                            // Go back to the start of the original instruction so it actually gets executed
+                            unsafe {
+                                libc::ptrace(
+                                    libc::PTRACE_POKEUSER,
+                                    pid,
+                                    8 * libc::RIP,
+                                    user_regs.ip - 1,
+                                )
+                            };
+                            return (pid, PtraceEvent::BreakpointHit(*bp));
+                        } else {
+                            return (pid, PtraceEvent::Trap);
+                        }
+                    }
+
+                    #[cfg(target_arch = "aarch64")]
+                    {
+                        // We know we didnt hit a syscall but we might have hit a manual breakpoint, check if we hit a 0xcc
+                        let mut user_regs = pid.ptrace_getregs();
+                        if pid.ptrace_peektext(user_regs.pc as usize) & 0xFFFFFFFF == 0xD4200000 {
+                            let bp = self
+                                .breakpoints
+                                .iter_mut()
+                                .find(|bp| bp.address == user_regs.pc as usize)
+                                .expect("Hit a breakpoint, but we can't find it to uninstall");
+                            bp.uninstall(pid);
+
+                            // Go back to the start of the original instruction so it actually gets executed
+                            user_regs.pc -= 4;
+                            pid.ptrace_setregs(&mut user_regs);
+
+                            return (pid, PtraceEvent::BreakpointHit(*bp));
+                        } else {
+                            return (pid, PtraceEvent::Trap);
+                        }
                     }
                 } else {
                     match event {

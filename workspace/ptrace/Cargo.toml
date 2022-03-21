@@ -12,5 +12,5 @@ linux_memory_map = { path = "../linux_memory_map" }
 [features]
 default = []
 breakpoints = []
-child_processes = []
 snapshots = []
+event_debugger = []

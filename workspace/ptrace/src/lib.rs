@@ -4,6 +4,7 @@
 pub use linux_ptrace::*;
 #[cfg(all(target_os = "linux", feature = "breakpoints"))]
 pub mod breakpoint;
+#[cfg(all(target_os = "linux", feature = "event_debugger"))]
 pub mod event_debugger;
 #[cfg(target_os = "linux")]
 pub mod process;
@@ -122,4 +123,9 @@ mod linux_ptrace {
             child_proc
         }
     }
+}
+
+#[test]
+fn t() {
+    println!("Hi");
 }
