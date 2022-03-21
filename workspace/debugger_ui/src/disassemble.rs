@@ -137,10 +137,20 @@ impl InnerRender for WidgetDisassemble {
                             .process_state
                             .iter()
                             .find(|p| {
-                                p.cache_user_regs
-                                    .as_ref()
-                                    .map(|ur| ur.ip == instruction.ip())
-                                    .unwrap_or(false)
+                                #[cfg(target_arch = "aarch64")]
+                                {
+                                    p.cache_user_regs
+                                        .as_ref()
+                                        .map(|ur| ur.pc == instruction.ip())
+                                        .unwrap_or(false)
+                                }
+                                #[cfg(target_arch = "x86_64")]
+                                {
+                                    p.cache_user_regs
+                                        .as_ref()
+                                        .map(|ur| ur.ip == instruction.ip())
+                                        .unwrap_or(false)
+                                }
                             })
                             .is_some()
                         {
