@@ -327,7 +327,21 @@ impl DebuggingClient for LinuxPtraceDebuggingClient {
 
             let mut debugger = EventDrivenPtraceDebugger::new(&binary_path, "Debuggee", &farg);
 
-            let mut child = debugger.start();
+            /// Create a new pipe, returning (readfd, writefd)
+            /// Just a nice wrapper around pipe(2)
+            fn make_pipe() -> (libc::c_int, libc::c_int) {
+                let filedes = [libc::c_int; 2];
+                let res = unsafe { libc::pipe(&mut filedes as *mut _) };
+                assert_eq!(res, 0);
+            }
+
+            let (stderr_read, stderr_write) = make_pipe();
+            let mut child = debugger.start(Some(|| {
+                // Redirect the stderr to the pipe
+                //TODO: do other streams
+                let res = unsafe { libc::dup2(stderr_write, libc::STDERR_FILENO) };
+                assert_ne!(res, -1);
+            }));
 
             send_from_debug
                 .send(DebuggerMsg::ProcessSpawn(child))
@@ -439,6 +453,7 @@ impl DebuggingClient for LinuxPtraceDebuggingClient {
                         }
                     }
 
+                    // Check for new control msgs
                     while let Some(msg) = control_messages.write().unwrap().pop() {
                         println!("Got ctrl msg: {:?}", msg);
                         match msg {
@@ -461,6 +476,24 @@ impl DebuggingClient for LinuxPtraceDebuggingClient {
                             _ => unimplemented!("Got early ctrl msg: {:?}", msg),
                         }
                     }
+
+                    // Read from the redirected input pipes
+                    let mut stderr_new_data = Vec::new();
+                    let mut stderr_buf = [u8; 4096];
+                    loop {
+                        let amount_read = unsafe { libc::read(stderr_read, &mut stderr_buf as *mut _, 4096) };
+                        // EOF
+                        if amount_read == 0 {
+                            break;
+                        }
+                        // Couldn't fill buffer
+                        if amount_read < 4096 {
+                            break;
+                        }
+                        stderr_new_data.extend_from_slice(&stderr_buf);
+                    }
+                    // Send data to ui
+                    send_from_debug.send(DebuggerMsg::StdErrContent(pid, stderr_new_data)).expect("Failed to send");
 
                     macro_rules! send_regs {
                         () => {

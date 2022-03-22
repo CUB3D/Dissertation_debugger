@@ -42,6 +42,8 @@ pub struct ProcessState {
     pub syscall_list: Vec<Syscall>,
     /// True if the process is currently alive, false if it's dead
     pub alive: bool,
+    /// The stderr output for this process
+    pub stderr: Vec<String>,
 }
 
 impl ProcessState {
@@ -55,6 +57,7 @@ impl ProcessState {
             call_stack: None,
             memory_map: None,
             syscall_list: Vec::new(),
+            stderr: Default::default(),
             alive: true,
         }
     }
@@ -90,11 +93,17 @@ impl DebuggerStatus {
 
 #[derive(Default)]
 pub struct DebuggerState {
+    /// All the breakpoints that have been added
     pub breakpoints: Vec<Breakpoint>,
+    /// The main or parent of all other processes
     pub process: Option<Process>,
+    /// The state of all of the processess
     pub process_state: Vec<ProcessState>,
+    /// The loaded file, not always an elf
     pub elf: Option<BinaryFile>,
+    /// The breakpoint that has been most recently hit, if it exists
     pub current_breakpoint: Option<Breakpoint>,
+    /// The current state of the debugger
     pub status: DebuggerStatus,
     //TODO: group these three together, if we have one we should have all
     pub sender: Option<Sender<Msg>>,
@@ -241,6 +250,15 @@ impl DebuggerState {
                     if !self.process_state.first().unwrap().alive {
                         self.status = DebuggerStatus::Dead;
                     }
+                }
+                DebuggerMsg::StdErrContent(pid, content) => {
+                    let proc = self.process_state
+                        .iter_mut()
+                        .find(|p| p.process == pid)
+                        .expect("No process to mark dead");
+
+                    let content = String::from_utf8_lossy(&content).to_string().split("\n").map(|s|s.to_string()).collect::<Vec<_>>();
+                    proc.stderr.extend_from_slice(&content);
                 }
             }
         }

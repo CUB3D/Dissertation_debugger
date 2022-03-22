@@ -20,14 +20,11 @@ pub mod memory_view;
 pub mod registers;
 pub mod syscall;
 pub mod ui;
+pub mod output_console;
 
-///disassemble should have lines for branches
-// should be able to pause in place (maybe we can send a sigstop?)
+///TODO: disassemble should have lines for branches
 // save snapshots?
 // have a log so that prints are visible in the gui
-
-// Needed for other things:
-// breakpoints api that works
 
 fn main() {
     let matches = Command::new("debugger")
