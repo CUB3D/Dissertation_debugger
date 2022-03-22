@@ -18,7 +18,19 @@ use mach::vm_prot::VM_PROT_COPY;
 use std::ffi::CString;
 use std::sync::{Arc, RwLock};
 
-#[cfg(target_os = "macos")]
+/// Sourced from https://github.com/apple/darwin-xnu/blob/main/osfmk/mach/arm/thread_status.h
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Default)]
+pub struct arm_thread_state64 {
+    pub x: [u64; 29],
+    pub fp: u64,
+    pub lr: u64,
+    pub sp: u64,
+    pub pc: u64,
+    pub cpsr: u32,
+    pub flags: u32,
+}
+
 #[derive(Copy, Clone, Debug, PartialEq, Hash, Default)]
 pub struct Process(pub i32);
 
@@ -85,6 +97,25 @@ impl Process {
 
         thread_state
     }
+
+    pub fn get_thread_state_arm64(&self, tid: thread_act_t) -> arm_thread_state64 {
+        let mut thread_state = arm_thread_state64::default();
+        let mut sc = (std::mem::size_of::<arm_thread_state64>()
+            / std::mem::size_of::<libc::c_int>()) as u32;
+        sc = 1000;
+        let res = unsafe {
+            thread_get_state(
+                tid,
+                /*ARM_THREAD_STATE*/ 1,
+                (&mut thread_state) as *mut _ as thread_state_t,
+                &mut sc as *mut _,
+            )
+        };
+        assert_eq!(res, libc::KERN_SUCCESS);
+        println!("RIP = {:X}", thread_state.pc);
+        println!("rax = {:X}", thread_state.x[0]);
+        thread_state
+    }
 }
 
 #[derive(Default)]
@@ -112,16 +143,14 @@ impl DarwinDebuggingClient {
         let task = pid.get_task();
         let threads = pid.get_threads(task);
         let tid = *threads.first().unwrap();
+        let thread_state = pid.get_thread_state_x86_64(tid);
+        let thread_state = pid.get_thread_state_arm64(tid);
+        println!("Got thread state");
+        println!("Proc stopped, continuing");
+        let r = unsafe { libc::ptrace(libc::PT_STEP, pid.0, 1 as _, 0) };
 
 
         /*loop {*/
-
-
-
-
-            let thread_state = pid.get_thread_state_x86_64(tid);
-        println!("Got thread state");
-
             /*if true {
                 let addr = 0x100003e20;
                 // Make memory r/w first
@@ -181,8 +210,7 @@ impl DarwinDebuggingClient {
 
             //TODO: we can probably install breakpoint here, then we can PT_Continue until we hit it
 
-            println!("Proc stopped, continuing");
-            let r = unsafe { libc::ptrace(libc::PT_STEP, pid.0, 1 as _, 0) };
+
             // println!("Continue done");
             // let r = unsafe { libc::ptrace(libc::PT_CONTINUE, pid, 1 as _, 0) };
 
