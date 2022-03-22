@@ -491,6 +491,7 @@ version = "0.1.0"
 dependencies = [
  "crossbeam-channel",
  "exe",
+ "fat-macho",
  "goblin",
  "libc",
  "linux_memory_map",
@@ -612,6 +613,16 @@ name = "fallible-iterator"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4443176a9f2c162692bd3d352d745ef9413eec5782a80d8fd6f8a1ac692a07f7"
+
+[[package]]
+name = "fat-macho"
+version = "0.4.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9a3e1eb8ca92711774ac8be2853c1be22f3d0194e165c9a688eab2a16a68b0f0"
+dependencies = [
+ "goblin",
+ "llvm-bitcode",
+]
 
 [[package]]
 name = "flate2"
@@ -1094,6 +1105,15 @@ dependencies = [
 [[package]]
 name = "linux_memory_map"
 version = "0.1.0"
+
+[[package]]
+name = "llvm-bitcode"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8b95dfd93cc39d3f09d996e5210905cf97f542aa54c08906a8e8b5f6ad5853bb"
+dependencies = [
+ "num_enum",
+]
 
 [[package]]
 name = "lock_api"

@@ -55,9 +55,11 @@ pub struct FpRegs {
     pub st_space: [libc::c_uint; 32],
     pub xmm_space: [libc::c_uint; 64],
 }
-#[cfg(not(target_os = "linux"))]
+#[cfg(target_os = "windows")]
 #[derive(Copy, Clone, Debug, PartialEq, Hash)]
 pub struct Process(pub i32);
+#[cfg(target_os = "macos")]
+pub use crate::mac_debugging_client::Process;
 
 /// Messages send from the ui to the debugging client
 #[derive(Clone, Debug)]

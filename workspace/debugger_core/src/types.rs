@@ -1,5 +1,45 @@
 pub use linux_memory_map::*;
+#[cfg(target_os = "linux")]
 pub use ptrace::types::UserRegs;
+#[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+#[derive(Default, Debug, Copy, Clone)]
+pub struct UserRegs {
+    pub regs: [u64; 31],
+    pub sp: u64,
+    pub pc: u64,
+    pub pstate: u64,
+}
+#[cfg(all(target_os = "macos", target_arch = "x86_64"))]
+#[derive(Default, Debug, Copy, Clone)]
+pub struct UserRegs {
+    pub r15: libc::c_ulonglong,
+    pub r14: libc::c_ulonglong,
+    pub r13: libc::c_ulonglong,
+    pub r12: libc::c_ulonglong,
+    pub bp: libc::c_ulonglong,
+    pub bx: libc::c_ulonglong,
+    pub r11: libc::c_ulonglong,
+    pub r10: libc::c_ulonglong,
+    pub r9: libc::c_ulonglong,
+    pub r8: libc::c_ulonglong,
+    pub ax: libc::c_ulonglong,
+    pub cx: libc::c_ulonglong,
+    pub dx: libc::c_ulonglong,
+    pub si: libc::c_ulonglong,
+    pub di: libc::c_ulonglong,
+    pub orig_ax: libc::c_ulonglong,
+    pub ip: libc::c_ulonglong,
+    pub cs: libc::c_ulonglong,
+    pub flags: libc::c_ulonglong,
+    pub sp: libc::c_ulonglong,
+    pub ss: libc::c_ulonglong,
+    pub fs_base: libc::c_ulonglong,
+    pub gs_base: libc::c_ulonglong,
+    pub ds: libc::c_ulonglong,
+    pub es: libc::c_ulonglong,
+    pub fs: libc::c_ulonglong,
+    pub gs: libc::c_ulonglong,
+}
 
 /// A syscall argument
 #[derive(Debug, Clone)]
