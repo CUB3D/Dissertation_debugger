@@ -9,7 +9,7 @@ use imgui::Window;
 pub struct WidgetConsole {
     pub visible: bool,
 }
-define_ui_menu!(WidgetConsole, "WidgetConsole");
+define_ui_menu!(WidgetConsole, "Output");
 
 impl InnerRender for WidgetConsole {
     fn render_inner(&mut self, state: &mut DebuggerState, ui: &Ui) {
