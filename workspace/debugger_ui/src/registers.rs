@@ -21,11 +21,24 @@ impl InnerRender for WidgetRegisters {
                 if let Some(tab) = ui.tab_item(format!("Registers ({})", state.process.0)) {
                     #[cfg(target_arch = "aarch64")]
                     if let Some(user_regs) = &state.cache_user_regs {
+
                         ui.text(format!("PC: 0x{:X} ({})", user_regs.pc, user_regs.pc));
                         ui.text(format!("SP: 0x{:X} ({})", user_regs.sp, user_regs.sp));
 
                         for (index, reg) in user_regs.regs.iter().copied().enumerate() {
-                            ui.text(format!("x{}: 0x{:X} ({})", index, reg, reg));
+                            let maybe_ascii = if let Some(s) = std::char::from_u32(reg as u32) {
+                                if s.is_ascii_alphanumeric()
+                                    || s.is_ascii_punctuation()
+                                    || s.is_ascii_whitespace() {
+                                    format!(" ({})", s)
+                                } else {
+                                    "".to_string()
+                                }
+                            } else {
+                                "".to_string()
+                            };
+
+                            ui.text(format!("x{}: 0x{:X} ({}){}", index, reg, reg, maybe_ascii));
                         }
                     }
                     #[cfg(target_arch = "x86_64")]

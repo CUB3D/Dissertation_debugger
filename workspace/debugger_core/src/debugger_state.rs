@@ -106,9 +106,7 @@ impl DebuggerState {
     pub fn load_binary(&mut self, binary: &str) {
         let binary_content = std::fs::read(&binary).expect("Failed to read binary");
 
-        // if let Ok(fr) = fat_macho::FatReader::new(&binary_content) {
-        //     self.elf = Some(BinaryFile::MachO);
-        // } else {
+        // Try loading file as a ELF
         if let Ok(gelf) = goblin::elf::Elf::parse(&binary_content) {
             if let Some(malloc) = gelf
                 .syms
@@ -123,8 +121,19 @@ impl DebuggerState {
             //TODO: symbols ui + breakpoints on symbol adding
             // When break on malloc/free track the ptrs
 
-            self.elf = Some(BinaryFile::Elf(binary_content));
-        } //else {
+            self.elf = Some(BinaryFile::Elf(binary_content.clone()));
+        }
+
+        // Try loading file as a macho (macos)
+        if self.elf.is_none() {
+            if let Ok(gmacho) = goblin::mach::MachO::parse(&binary_content, 0) {
+                self.elf = Some(BinaryFile::MachO);
+            } else {
+                println!("Failed to load macho");
+            }
+        }
+
+         //else {
           //     if let Ok(pe) = exe::PEImage::from_disk_file(binary) {
           //         self.elf = Some(BinaryFile::PE(pe));
           //     }
