@@ -35,12 +35,17 @@ impl EventDrivenPtraceDebugger {
         }
     }
 
-    pub fn start(&mut self) -> Process {
+    /// Start the process for debugging, will start in a paused state as per Ptrace::inital_spawn_child
+    /// Callback is invoked just before execveing the new child process
+    /// If already debugging a process this will clear our any existing state and breakpoints so that
+    /// only events for the new child are received
+    pub fn start<T>(&mut self, child_callback: Option<T>) where T: Fn() -> Process {
         self.processes.clear();
         self.in_syscall.clear();
         self.breakpoints.clear();
 
-        let child = self.debugger.inital_spawn_child();
+        let child = self.debugger.inital_spawn_child(child_callback);
+
         self.processes.push(child);
         child
     }

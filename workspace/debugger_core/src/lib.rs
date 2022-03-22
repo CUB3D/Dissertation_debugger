@@ -107,4 +107,6 @@ pub enum DebuggerMsg {
     FpRegisters(Process, Box<FpRegs>),
     /// The given process has new memory state
     Memory(Process, Vec<(Vec<u8>, Range<usize>)>),
+    /// The given process has new data in stderr
+    StdErrContent(Process, Vec<u8>),
 }

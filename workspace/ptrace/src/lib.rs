@@ -74,7 +74,8 @@ mod linux_ptrace {
         }
 
         /// Fork and spawn a child for debugging
-        pub fn inital_spawn_child(&self) -> Process {
+        /// child_callback will be executed by the forked child before excve'ing
+        pub fn inital_spawn_child<T>(&self, child_callback: Option<T>) where T: Fn() -> Process {
             let child = unsafe { libc::fork() };
             let child_proc = Process(child);
 
@@ -86,6 +87,12 @@ mod linux_ptrace {
                 // Mark that this process should not use ASLR so we can set breakpoints easily
                 unsafe { libc::personality(libc::ADDR_NO_RANDOMIZE as u64) };
 
+                // Call the callback if it exists
+                if let Some(callback) = child_callback {
+                    callback();
+                }
+
+                // Convert args into a null terminated list of ptrs
                 let mut pointers = Vec::new();
                 for arg in &self.args {
                     pointers.push(arg.as_ptr());

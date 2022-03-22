@@ -12,6 +12,7 @@ use crate::controls::WidgetControls;
 use crate::disassemble::WidgetDisassemble;
 use crate::elf_info::WidgetElfInfo;
 use crate::memory_view::WidgetMemoryView;
+use crate::output_console::WidgetConsole;
 use crate::syscall::WidgetSyscallList;
 
 pub struct DebuggerUi {
@@ -25,6 +26,7 @@ pub struct DebuggerUi {
     stack: WidgetCallStack,
     dissassemble: WidgetDisassemble,
     controls: WidgetControls,
+    console: WidgetConsole,
     children: WidgetChildProcesses,
 }
 
@@ -41,6 +43,7 @@ impl Default for DebuggerUi {
             stack: Default::default(),
             dissassemble: Default::default(),
             controls: Default::default(),
+            console: Default::default(),
             children: Default::default(),
         }
     }
@@ -58,6 +61,7 @@ impl DebuggerUi {
             self.stack.as_uimenu(),
             self.dissassemble.as_uimenu(),
             self.controls.as_uimenu(),
+            self.console.as_uimenu(),
             self.children.as_uimenu(),
         ];
 
