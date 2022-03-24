@@ -53,6 +53,11 @@ pub fn init(title: &str) -> System {
 
     let mut imgui = Context::create();
     imgui.set_ini_filename(Some(PathBuf::from("debugger_conf.ini")));
+    imgui.style_mut().anti_aliased_fill = true;
+    imgui.style_mut().anti_aliased_lines = true;
+    imgui.style_mut().anti_aliased_lines_use_tex = true;
+    imgui.style_mut().window_rounding = 8.0f32;
+    imgui.style_mut().use_dark_colors();
 
     if let Some(backend) = clipboard::init() {
         imgui.set_clipboard_backend(backend);
@@ -64,19 +69,48 @@ pub fn init(title: &str) -> System {
     {
         let gl_window = display.gl_window();
         let window = gl_window.window();
-        platform.attach_window(imgui.io_mut(), window, HiDpiMode::Rounded);
+        platform.attach_window(imgui.io_mut(), window, HiDpiMode::Default);
     }
 
-    let hidpi_factor = platform.hidpi_factor();
-    let font_size = (13.0 * hidpi_factor) as f32;
-    imgui.fonts().add_font(&[FontSource::DefaultFontData {
-        config: Some(FontConfig {
+    let font_size = 13.0;
+    /*imgui.fonts().add_font(&[
+        FontSource::TtfData {
+            data: include_bytes!("../resources/Roboto-Regular.ttf"),
             size_pixels: font_size,
-            ..FontConfig::default()
-        }),
-    }]);
+            config: Some(FontConfig {
+                // As imgui-glium-renderer isn't gamma-correct with
+                // it's font rendering, we apply an arbitrary
+                // multiplier to make the font a bit "heavier". With
+                // default imgui-glow-renderer this is unnecessary.
+                rasterizer_multiply: 1.5,
+                // Oversampling font helps improve text rendering at
+                // expense of larger font atlas texture.
+                oversample_h: 4,
+                oversample_v: 4,
+                ..FontConfig::default()
+            }),
+        },
+    ]);*/
+    imgui.fonts().add_font(&[
+        FontSource::TtfData {
+            data: include_bytes!("/Users/cub3d/Downloads/tmp/Library/Fonts/SF-Pro-Rounded-Light.otf"),
+            size_pixels: font_size,
+            config: Some(FontConfig {
+                // As imgui-glium-renderer isn't gamma-correct with
+                // it's font rendering, we apply an arbitrary
+                // multiplier to make the font a bit "heavier". With
+                // default imgui-glow-renderer this is unnecessary.
+                rasterizer_multiply: 1.5,
+                // Oversampling font helps improve text rendering at
+                // expense of larger font atlas texture.
+                oversample_h: 4,
+                oversample_v: 4,
+                ..FontConfig::default()
+            }),
+        },
+    ]);
 
-    imgui.io_mut().font_global_scale = (1.0 / hidpi_factor) as f32;
+    // imgui.io_mut().font_global_scale = (1.0 / hidpi_factor) as f32;
 
     let renderer = Renderer::init(&mut imgui, &display).expect("Failed to initialize renderer");
 
