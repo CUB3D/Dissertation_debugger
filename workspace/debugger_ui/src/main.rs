@@ -21,6 +21,7 @@ pub mod registers;
 pub mod syscall;
 pub mod ui;
 pub mod output_console;
+pub mod resources;
 
 ///TODO: disassemble should have lines for branches
 // save snapshots?

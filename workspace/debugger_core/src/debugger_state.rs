@@ -44,6 +44,12 @@ pub struct ProcessState {
     pub alive: bool,
     /// The stderr output for this process
     pub stderr: Vec<String>,
+    /// The stdout output for this process
+    pub stdout: Vec<String>,
+    /// Open files
+    pub open_files: Vec<u32>,
+    /// Open sockets
+    pub open_sockets: Vec<u32>,
 }
 
 impl ProcessState {
@@ -58,6 +64,9 @@ impl ProcessState {
             memory_map: None,
             syscall_list: Vec::new(),
             stderr: Default::default(),
+            stdout: Default::default(),
+            open_files: Default::default(),
+            open_sockets: Default::default(),
             alive: true,
         }
     }
@@ -153,6 +162,26 @@ impl DebuggerState {
         let (sender, reciever) = self.client.as_mut().unwrap().start(&binary, &[]);
         self.sender = Some(sender);
         self.reciever = Some(reciever);
+        
+        // For testing
+        /*let mut ur = Box::<UserRegs>::default();
+        ur.ax = 0x41;
+        ur.bx = 0x42;
+        let mut fp = unsafe { Box::<FpRegs>::new_zeroed().assume_init() };
+        self.process_state.push(ProcessState {
+            process: Process(2131),
+            cache_user_regs: Some(ur),
+            cache_fp_regs: Some(fp),
+            memory: vec![],
+            call_stack: None,
+            memory_map: None,
+            syscall_list: vec![],
+            alive: true,
+            stderr: vec!["Hello, World".to_string()],
+            stdout: vec![],
+            open_files: vec![],
+            open_sockets: vec![]
+        });*/
 
         self.status = DebuggerStatus::ReadyToStart;
     }
