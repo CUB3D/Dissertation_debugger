@@ -3,7 +3,7 @@ use glium::glutin::event::{Event, WindowEvent};
 use glium::glutin::event_loop::{ControlFlow, EventLoop};
 use glium::glutin::window::WindowBuilder;
 use glium::{Display, Surface};
-use imgui::{Context, FontConfig, FontSource, Ui};
+use imgui::{Context, FontConfig, FontId, FontSource, Ui};
 use imgui_glium_renderer::Renderer;
 use imgui_winit_support::{HiDpiMode, WinitPlatform};
 use std::path::{Path, PathBuf};
@@ -36,6 +36,8 @@ pub struct System {
     pub platform: WinitPlatform,
     pub renderer: Renderer,
     pub font_size: f32,
+    pub ui_font: FontId,
+    pub mono_font: FontId,
 }
 
 pub fn init(title: &str) -> System {
@@ -73,9 +75,9 @@ pub fn init(title: &str) -> System {
     }
 
     let font_size = 13.0;
-    /*imgui.fonts().add_font(&[
+    let roboto = imgui.fonts().add_font(&[
         FontSource::TtfData {
-            data: include_bytes!("../resources/Roboto-Regular.ttf"),
+            data: include_bytes!("../resources/Roboto/Roboto-Regular.ttf"),
             size_pixels: font_size,
             config: Some(FontConfig {
                 // As imgui-glium-renderer isn't gamma-correct with
@@ -90,8 +92,27 @@ pub fn init(title: &str) -> System {
                 ..FontConfig::default()
             }),
         },
-    ]);*/
-    imgui.fonts().add_font(&[
+    ]);
+    let fira = imgui.fonts().add_font(&[
+        FontSource::TtfData {
+            data: include_bytes!("../resources/Fira/FiraMono-Regular.ttf"),
+            size_pixels: font_size,
+            config: Some(FontConfig {
+                // As imgui-glium-renderer isn't gamma-correct with
+                // it's font rendering, we apply an arbitrary
+                // multiplier to make the font a bit "heavier". With
+                // default imgui-glow-renderer this is unnecessary.
+                rasterizer_multiply: 1.5,
+                // Oversampling font helps improve text rendering at
+                // expense of larger font atlas texture.
+                oversample_h: 4,
+                oversample_v: 4,
+                ..FontConfig::default()
+            }),
+        },
+    ]);
+    println!("Fonts = {:?} {:?}", roboto, fira);
+    /*imgui.fonts().add_font(&[
         FontSource::TtfData {
             data: include_bytes!("/Users/cub3d/Downloads/tmp/Library/Fonts/SF-Pro-Rounded-Light.otf"),
             size_pixels: font_size,
@@ -108,7 +129,7 @@ pub fn init(title: &str) -> System {
                 ..FontConfig::default()
             }),
         },
-    ]);
+    ]);*/
 
     // imgui.io_mut().font_global_scale = (1.0 / hidpi_factor) as f32;
 
@@ -121,6 +142,8 @@ pub fn init(title: &str) -> System {
         platform,
         renderer,
         font_size,
+        mono_font: fira,
+        ui_font: roboto,
     }
 }
 

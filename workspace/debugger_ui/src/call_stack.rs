@@ -13,14 +13,14 @@ impl InnerRender for WidgetCallStack {
         if let Some(tab_bar) = ui.tab_bar("CallStacks") {
             for state in &mut state.process_state {
                 if let Some(tab) = ui.tab_item(format!("CallStacks ({})", state.process.0)) {
-                    if let Some(table) = ui.begin_table_header(
-                        "CallStack",
-                        [
-                            TableColumnSetup::new("Address"),
-                            TableColumnSetup::new("Description"),
-                        ],
-                    ) {
-                        if let Some(call_stack) = &state.call_stack {
+                    if let Some(call_stack) = &state.call_stack {
+                        if let Some(table) = ui.begin_table_header(
+                            "CallStack",
+                            [
+                                TableColumnSetup::new("Address"),
+                                TableColumnSetup::new("Description"),
+                            ],
+                        ) {
                             for frame in &call_stack.0 {
                                 ui.table_next_column();
                                 ui.text(format!("{:#016X}", frame.addr));
@@ -28,10 +28,11 @@ impl InnerRender for WidgetCallStack {
                                 ui.text(&frame.description);
                                 ui.table_next_row();
                             }
-                        } else {
-                            ui.text("No call stack!");
+
+                            table.end();
                         }
-                        table.end();
+                    } else {
+                        ui.text("No call stack!");
                     }
                     tab.end();
                 }
