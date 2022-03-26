@@ -291,9 +291,6 @@ impl LinuxPtraceDebuggingClient {
             }
         }
     }
-
-    // Run the ptrace event loop
-    // Waits for signals from the process and responds appropriately
 }
 
 impl DebuggingClient for LinuxPtraceDebuggingClient {
@@ -340,18 +337,25 @@ impl DebuggingClient for LinuxPtraceDebuggingClient {
 
             /// Mark the given fd as nonblocking
             fn make_non_blocking(fd: libc::c_int) {
-                let old = unsafe { libc::fcntl(fd, F_GETFL) };
-                let res = unsafe { libc::fcntl(fd, F_SETFL, old | libc::O_NONBLOCK) };
+                let old = unsafe { libc::fcntl(fd, libc::F_GETFL) };
+                let res = unsafe { libc::fcntl(fd, libc::F_SETFL, old | libc::O_NONBLOCK) };
                 assert_ne!(res, -1);
             }
 
             let (mut stderr_read, mut stderr_write) = make_pipe();
+            let (mut stdout_read, mut stdout_write) = make_pipe();
+            let (mut stdin_read, mut stdin_write) = make_pipe();
             make_non_blocking(stderr_read);
+            make_non_blocking(stdout_read);
+            make_non_blocking(stdin_read);
             let mut child = debugger.start(Some(|| {
                 // Redirect the stderr to the pipe
-                //TODO: do other streams
-                // let res = unsafe { libc::dup2(stderr_write, libc::STDERR_FILENO) };
-                // assert_ne!(res, -1);
+                let res = unsafe { libc::dup2(stderr_write, libc::STDERR_FILENO) };
+                assert_ne!(res, -1);
+                let res = unsafe { libc::dup2(stdout_write, libc::STDOUT_FILENO) };
+                assert_ne!(res, -1);
+                let res = unsafe { libc::dup2(stdin_read, libc::STDIN_FILENO) };
+                assert_ne!(res, -1);
             }));
 
             send_from_debug
@@ -476,8 +480,11 @@ impl DebuggingClient for LinuxPtraceDebuggingClient {
                                 //TODO: kill the child
                                 child = debugger.start(Some(|| {
                                     // Redirect the stderr to the pipe
-                                    //TODO: do other streams
                                     let res = unsafe { libc::dup2(stderr_write, libc::STDERR_FILENO) };
+                                    assert_ne!(res, -1);
+                                    let res = unsafe { libc::dup2(stdout_write, libc::STDOUT_FILENO) };
+                                    assert_ne!(res, -1);
+                                    let res = unsafe { libc::dup2(stdin_read, libc::STDIN_FILENO) };
                                     assert_ne!(res, -1);
                                 }));
 
@@ -497,27 +504,36 @@ impl DebuggingClient for LinuxPtraceDebuggingClient {
                         }
                     }
 
-                    // Read from the redirected input pipes
-                    //TODO: need this to be non blocking
-                   /* let mut stderr_new_data = Vec::new();
-                    let mut stderr_buf = [0u8; 4096];
-                    loop {
-                        let amount_read = unsafe { libc::read(stderr_read, stderr_buf.as_mut_ptr() as *mut _, 4096) };
-                        println!("read = {}", amount_read);
-                        // EOF
-                        if amount_read == 0 {
-                            break;
+                    fn read_from_pipe(pipe_fd: libc::c_int) -> Option<Vec<u8>> {
+                        let mut new_data = Vec::new();
+                        let mut buf = [0u8; 4096];
+                        loop {
+                            let amount_read = unsafe { libc::read(pipe_fd, buf.as_mut_ptr() as *mut _, 4096) };
+                            // Nothing in pipe
+                            if amount_read == -1 {
+                                break;
+                            }
+                            // EOF
+                            if amount_read == 0 {
+                                break;
+                            }
+                            // Copy the amount of bytes read into the output vec
+                            new_data.extend_from_slice(&buf[..amount_read as usize]);
                         }
-                        // Couldn't fill buffer
-                        if amount_read < 4096 {
-                            break;
+                        if new_data.len() > 0 {
+                            Some(new_data)
+                        } else {
+                            None
                         }
-                        stderr_new_data.extend_from_slice(&stderr_buf);
                     }
-                    println!("Done stderr");
 
-                    // Send data to ui
-                    send_from_debug.send(DebuggerMsg::StdErrContent(pid, stderr_new_data)).expect("Failed to send");*/
+                    // Read from the redirected input pipes
+                    if let Some(data) = read_from_pipe(stderr_read) {
+                        send_from_debug.send(DebuggerMsg::StdErrContent(pid, data)).expect("Failed to send");
+                    }
+                    if let Some(data) = read_from_pipe(stdout_read) {
+                        send_from_debug.send(DebuggerMsg::StdOutContent(pid, data)).expect("Failed to send");
+                    }
 
                     macro_rules! send_regs {
                         () => {
@@ -551,16 +567,38 @@ impl DebuggingClient for LinuxPtraceDebuggingClient {
                         };
                     }
 
-                    //println!("Got ptrace evt: {:?} @ {:?}", evt, pid);
-                    match evt {
-                        PtraceEvent::SyscallEnter => {
+                    macro_rules! get_call_stack {
+                        () => {
                             // If we can get a call stack, forward that to the ui
-                            if let Ok(call_stack) = LinuxPtraceDebuggingClient::get_call_stack(pid)
-                            {
+                            if let Ok(call_stack) = LinuxPtraceDebuggingClient::get_call_stack(pid) {
                                 send_from_debug
                                     .send(DebuggerMsg::CallStack(pid, call_stack))
                                     .expect("Send fail");
                             }
+                        };
+                    }
+
+                    macro_rules! get_memory {
+                        () => {
+                            // If we can get a memory map for the process
+                            if let Some(mmap) = LinuxPtraceDebuggingClient::get_memory_map(pid) {
+                                send_from_debug
+                                    .send(DebuggerMsg::MemoryMap(pid, mmap))
+                                    .expect("Send fail");
+                            }
+
+                            // Try and send memory state
+                            let memory = LinuxPtraceDebuggingClient::get_memory(pid);
+                            send_from_debug
+                                .send(DebuggerMsg::Memory(pid, memory))
+                                .expect("Send fail");
+                        };
+                    }
+
+                    //println!("Got ptrace evt: {:?} @ {:?}", evt, pid);
+                    match evt {
+                        PtraceEvent::SyscallEnter => {
+                            get_call_stack!();
 
                             let user_regs = pid.ptrace_getregs();
                             // Figure out the details of the syscall
@@ -579,25 +617,8 @@ impl DebuggingClient for LinuxPtraceDebuggingClient {
                             continue 'big_exit;
                         }
                         PtraceEvent::Exit(exit_status) => {
-                            // If we can get a call stack, forward that to the ui
-                            if let Ok(call_stack) = LinuxPtraceDebuggingClient::get_call_stack(pid)
-                            {
-                                send_from_debug.send(DebuggerMsg::CallStack(pid, call_stack)).expect("Failed to send");
-                            }
-
-                            // If we can get a memory map for the process
-                            if let Some(mmap) = LinuxPtraceDebuggingClient::get_memory_map(pid) {
-                                send_from_debug
-                                    .send(DebuggerMsg::MemoryMap(pid, mmap))
-                                    .expect("Send fail");
-                            }
-
-                            // Try and send memory state
-                            let memory = LinuxPtraceDebuggingClient::get_memory(pid);
-                            send_from_debug
-                                .send(DebuggerMsg::Memory(pid, memory))
-                                .expect("Send fail");
-
+                            get_call_stack!();
+                            get_memory!();
                             send_regs!();
 
                             println!(
@@ -638,25 +659,8 @@ impl DebuggingClient for LinuxPtraceDebuggingClient {
                             continue 'big_exit;
                         }
                         PtraceEvent::Trap => {
-                            // If we can get a call stack, forward that to the ui
-                            if let Ok(call_stack) = LinuxPtraceDebuggingClient::get_call_stack(pid)
-                            {
-                                send_from_debug.send(DebuggerMsg::CallStack(pid, call_stack)).expect("Failed to send");
-                            }
-
-                            // If we can get a memory map for the process
-                            if let Some(mmap) = LinuxPtraceDebuggingClient::get_memory_map(pid) {
-                                send_from_debug
-                                    .send(DebuggerMsg::MemoryMap(pid, mmap))
-                                    .expect("Send fail");
-                            }
-
-                            // Try and send memory state
-                            let memory = LinuxPtraceDebuggingClient::get_memory(pid);
-                            send_from_debug
-                                .send(DebuggerMsg::Memory(pid, memory))
-                                .expect("Send fail");
-
+                            get_call_stack!();
+                            get_memory!();
                             send_regs!();
 
                             send_from_debug
@@ -670,26 +674,9 @@ impl DebuggingClient for LinuxPtraceDebuggingClient {
                                 .send(DebuggerMsg::BPTrap { breakpoint: bp })
                                 .expect("Faeild to send from debug");
 
-                            // If we can get a call stack, forward that to the ui
-                            if let Ok(call_stack) = LinuxPtraceDebuggingClient::get_call_stack(pid)
-                            {
-                                send_from_debug.send(DebuggerMsg::CallStack(pid, call_stack)).expect("Failed to send");
-                            }
-
-                            // If we can get a memory map for the process
-                            if let Some(mmap) = LinuxPtraceDebuggingClient::get_memory_map(pid) {
-                                send_from_debug
-                                    .send(DebuggerMsg::MemoryMap(pid, mmap))
-                                    .expect("Send fail");
-                            }
-
+                            get_call_stack!();
+                            get_memory!();
                             send_regs!();
-
-                            // Try and send memory state
-                            let memory = LinuxPtraceDebuggingClient::get_memory(pid);
-                            send_from_debug
-                                .send(DebuggerMsg::Memory(pid, memory))
-                                .expect("Send fail");
                         }
                     }
 
@@ -712,8 +699,11 @@ impl DebuggingClient for LinuxPtraceDebuggingClient {
                                     //TODO: kill the child
                                     child = debugger.start(Some(|| {
                                         // Redirect the stderr to the pipe
-                                        //TODO: do other streams
                                         let res = unsafe { libc::dup2(stderr_write, libc::STDERR_FILENO) };
+                                        assert_ne!(res, -1);
+                                        let res = unsafe { libc::dup2(stdout_write, libc::STDOUT_FILENO) };
+                                        assert_ne!(res, -1);
+                                        let res = unsafe { libc::dup2(stdin_read, libc::STDIN_FILENO) };
                                         assert_ne!(res, -1);
                                     }));
 
@@ -765,6 +755,10 @@ impl DebuggingClient for LinuxPtraceDebuggingClient {
                                 {
                                     breakpoints_pending_reinstall.remove(pos);
                                 }
+                            }
+                            Msg::StdinData(data) => {
+                                let res = unsafe { libc::write(stdin_write, data.as_bytes().as_ptr() as *const _, data.as_bytes().len())};
+                                assert_eq!(res, data.as_bytes().len() as isize);
                             }
                             _ => unimplemented!("Got early state msg: {:?}", msg),
                         }

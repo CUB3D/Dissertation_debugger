@@ -483,6 +483,7 @@ dependencies = [
  "imgui-glium-renderer",
  "imgui-memory-editor",
  "imgui-winit-support",
+ "linux_fd_info",
 ]
 
 [[package]]
@@ -494,6 +495,7 @@ dependencies = [
  "fat-macho",
  "goblin",
  "libc",
+ "linux_fd_info",
  "linux_memory_map",
  "mach",
  "ptrace",
@@ -1078,9 +1080,9 @@ checksum = "7efd1d698db0759e6ef11a7cd44407407399a910c774dd804c64c032da7826ff"
 
 [[package]]
 name = "libc"
-version = "0.2.112"
+version = "0.2.121"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1b03d17f364a3a042d5e5d46b053bbbf82c92c9430c592dd4c064dc6ee997125"
+checksum = "efaa7b300f3b5fe8eb6bf21ce3895e1751d9665086af2d64b42f19701015ff4f"
 
 [[package]]
 name = "libloading"
@@ -1100,6 +1102,13 @@ checksum = "afe203d669ec979b7128619bae5a63b7b42e9203c1b29146079ee05e2f604b52"
 dependencies = [
  "cfg-if 1.0.0",
  "winapi",
+]
+
+[[package]]
+name = "linux_fd_info"
+version = "0.1.0"
+dependencies = [
+ "libc",
 ]
 
 [[package]]
