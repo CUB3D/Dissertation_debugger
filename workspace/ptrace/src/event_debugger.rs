@@ -39,7 +39,7 @@ impl EventDrivenPtraceDebugger {
     /// Callback is invoked just before execveing the new child process
     /// If already debugging a process this will clear our any existing state and breakpoints so that
     /// only events for the new child are received
-    pub fn start<T>(&mut self, child_callback: Option<T>) where T: Fn() -> Process {
+    pub fn start<F: FnOnce()>(&mut self, child_callback: Option<F>) -> Process {
         self.processes.clear();
         self.in_syscall.clear();
         self.breakpoints.clear();

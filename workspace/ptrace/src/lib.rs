@@ -75,12 +75,11 @@ mod linux_ptrace {
 
         /// Fork and spawn a child for debugging
         /// child_callback will be executed by the forked child before excve'ing
-        pub fn inital_spawn_child<T>(&self, child_callback: Option<T>) where T: Fn() -> Process {
+        pub fn inital_spawn_child<F: FnOnce()>(&self, child_callback: Option<F>) -> Process {
             let child = unsafe { libc::fork() };
             let child_proc = Process(child);
 
             if child == 0 {
-                let _child_pid = unsafe { libc::getpid() };
                 // Mark the child for tracing
                 Process::ptrace_traceme();
 
