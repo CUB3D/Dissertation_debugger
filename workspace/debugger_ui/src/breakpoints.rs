@@ -16,8 +16,6 @@ impl InnerRender for WidgetBreakpoints {
             [
                 TableColumnSetup::new("Address"),
                 TableColumnSetup::new("Type"),
-                TableColumnSetup::new("Disassembly"),
-                TableColumnSetup::new("Hits"),
             ],
         ) {
             for bp in state.breakpoints.clone().iter() {
@@ -29,10 +27,6 @@ impl InnerRender for WidgetBreakpoints {
                 }
                 ui.table_next_column();
                 ui.text("Enabled");
-                ui.table_next_column();
-                ui.text("nop");
-                ui.table_next_column();
-                ui.text("0");
                 ui.table_next_row();
             }
             table.end();

@@ -43,13 +43,9 @@ pub struct ProcessState {
     /// True if the process is currently alive, false if it's dead
     pub alive: bool,
     /// The stderr output for this process
-    pub stderr: Vec<String>,
+    pub stderr: String,
     /// The stdout output for this process
-    pub stdout: Vec<String>,
-    /// Open files
-    pub open_files: Vec<u32>,
-    /// Open sockets
-    pub open_sockets: Vec<u32>,
+    pub stdout: String,
 }
 
 impl ProcessState {
@@ -65,8 +61,6 @@ impl ProcessState {
             syscall_list: Vec::new(),
             stderr: Default::default(),
             stdout: Default::default(),
-            open_files: Default::default(),
-            open_sockets: Default::default(),
             alive: true,
         }
     }
@@ -284,10 +278,19 @@ impl DebuggerState {
                     let proc = self.process_state
                         .iter_mut()
                         .find(|p| p.process == pid)
-                        .expect("No process to mark dead");
+                        .expect("No process to give stderr too");
 
-                    let content = String::from_utf8_lossy(&content).to_string().split("\n").map(|s|s.to_string()).collect::<Vec<_>>();
-                    proc.stderr.extend_from_slice(&content);
+                    let content = String::from_utf8_lossy(&content).to_string();
+                    proc.stderr.push_str(&content);
+                }
+                DebuggerMsg::StdOutContent(pid, content) => {
+                    let proc = self.process_state
+                        .iter_mut()
+                        .find(|p| p.process == pid)
+                        .expect("No process to give stdout too");
+
+                    let content = String::from_utf8_lossy(&content).to_string();
+                    proc.stdout.push_str(&content);
                 }
             }
         }
@@ -313,6 +316,7 @@ impl DebuggerState {
             Msg::DoSingleStep => {}
             Msg::Restart => {}
             Msg::Stop => {}
+            Msg::StdinData(_) => {}
         }
     }
 

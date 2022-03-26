@@ -76,6 +76,8 @@ pub enum Msg {
     Restart,
     /// Stop the process
     Stop,
+    /// Input for stdin
+    StdinData(String),
 }
 
 /// Messages send from the debugging client to the ui to notify of an event
@@ -109,4 +111,6 @@ pub enum DebuggerMsg {
     Memory(Process, Vec<(Vec<u8>, Range<usize>)>),
     /// The given process has new data in stderr
     StdErrContent(Process, Vec<u8>),
+    /// The given process has new data in stdout
+    StdOutContent(Process, Vec<u8>),
 }
