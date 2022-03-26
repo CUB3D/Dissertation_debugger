@@ -13,6 +13,7 @@ use ptrace::{Process};
 use std::iter::Iterator;
 use std::ops::Range;
 use std::sync::{Arc, RwLock};
+use libc::F_SETFL;
 
 
 use crate::types::{MemoryMap, MemoryMapEntry, MemoryMapEntryPermissions};
@@ -337,7 +338,15 @@ impl DebuggingClient for LinuxPtraceDebuggingClient {
                 (filedes[0], filedes[1])
             }
 
+            /// Mark the given fd as nonblocking
+            fn make_non_blocking(fd: libc::c_int) {
+                let old = unsafe { libc::fcntl(fd, F_GETFL) };
+                let res = unsafe { libc::fcntl(fd, F_SETFL, old | libc::O_NONBLOCK) };
+                assert_ne!(res, -1);
+            }
+
             let (mut stderr_read, mut stderr_write) = make_pipe();
+            make_non_blocking(stderr_read);
             let mut child = debugger.start(Some(|| {
                 // Redirect the stderr to the pipe
                 //TODO: do other streams
@@ -462,6 +471,7 @@ impl DebuggingClient for LinuxPtraceDebuggingClient {
                         match msg {
                             Msg::Restart => {
                                 (stderr_read, stderr_write) = make_pipe();
+                                make_non_blocking(stderr_read);
 
                                 //TODO: kill the child
                                 child = debugger.start(Some(|| {
@@ -697,6 +707,7 @@ impl DebuggingClient for LinuxPtraceDebuggingClient {
                                 Msg::Restart => {
                                     //TODO: kill the child
                                     (stderr_read, stderr_write) = make_pipe();
+                                    make_non_blocking(stderr_read);
 
                                     //TODO: kill the child
                                     child = debugger.start(Some(|| {
