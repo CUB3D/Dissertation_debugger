@@ -330,17 +330,19 @@ impl DebuggingClient for LinuxPtraceDebuggingClient {
             /// Create a new pipe, returning (readfd, writefd)
             /// Just a nice wrapper around pipe(2)
             fn make_pipe() -> (libc::c_int, libc::c_int) {
-                let filedes = [libc::c_int; 2];
+                let mut filedes = [0 as libc::c_int; 2];
                 let res = unsafe { libc::pipe(&mut filedes as *mut _) };
                 assert_eq!(res, 0);
+                println!("Created pipe {:?}", filedes);
+                (filedes[0], filedes[1])
             }
 
-            let (stderr_read, stderr_write) = make_pipe();
+            let (mut stderr_read, mut stderr_write) = make_pipe();
             let mut child = debugger.start(Some(|| {
                 // Redirect the stderr to the pipe
                 //TODO: do other streams
-                let res = unsafe { libc::dup2(stderr_write, libc::STDERR_FILENO) };
-                assert_ne!(res, -1);
+                // let res = unsafe { libc::dup2(stderr_write, libc::STDERR_FILENO) };
+                // assert_ne!(res, -1);
             }));
 
             send_from_debug
@@ -392,7 +394,7 @@ impl DebuggingClient for LinuxPtraceDebuggingClient {
                 child.ptrace_syscall();
 
                 'big_exit: loop {
-                    //println!("Waiting for ptrace events");
+                    // println!("Waiting for ptrace events");
                     let (pid, evt) = debugger.wait_for_event();
                     // println!("{:?} had an event {:?}", pid, evt);
 
@@ -453,13 +455,21 @@ impl DebuggingClient for LinuxPtraceDebuggingClient {
                         }
                     }
 
+
                     // Check for new control msgs
                     while let Some(msg) = control_messages.write().unwrap().pop() {
                         println!("Got ctrl msg: {:?}", msg);
                         match msg {
                             Msg::Restart => {
+                                (stderr_read, stderr_write) = make_pipe();
+
                                 //TODO: kill the child
-                                child = debugger.start();
+                                child = debugger.start(Some(|| {
+                                    // Redirect the stderr to the pipe
+                                    //TODO: do other streams
+                                    let res = unsafe { libc::dup2(stderr_write, libc::STDERR_FILENO) };
+                                    assert_ne!(res, -1);
+                                }));
 
                                 breakpoints_pending_reinstall.clear();
 
@@ -478,10 +488,12 @@ impl DebuggingClient for LinuxPtraceDebuggingClient {
                     }
 
                     // Read from the redirected input pipes
-                    let mut stderr_new_data = Vec::new();
-                    let mut stderr_buf = [u8; 4096];
+                    //TODO: need this to be non blocking
+                   /* let mut stderr_new_data = Vec::new();
+                    let mut stderr_buf = [0u8; 4096];
                     loop {
-                        let amount_read = unsafe { libc::read(stderr_read, &mut stderr_buf as *mut _, 4096) };
+                        let amount_read = unsafe { libc::read(stderr_read, stderr_buf.as_mut_ptr() as *mut _, 4096) };
+                        println!("read = {}", amount_read);
                         // EOF
                         if amount_read == 0 {
                             break;
@@ -492,8 +504,10 @@ impl DebuggingClient for LinuxPtraceDebuggingClient {
                         }
                         stderr_new_data.extend_from_slice(&stderr_buf);
                     }
+                    println!("Done stderr");
+
                     // Send data to ui
-                    send_from_debug.send(DebuggerMsg::StdErrContent(pid, stderr_new_data)).expect("Failed to send");
+                    send_from_debug.send(DebuggerMsg::StdErrContent(pid, stderr_new_data)).expect("Failed to send");*/
 
                     macro_rules! send_regs {
                         () => {
@@ -682,7 +696,15 @@ impl DebuggingClient for LinuxPtraceDebuggingClient {
                                 }
                                 Msg::Restart => {
                                     //TODO: kill the child
-                                    child = debugger.start();
+                                    (stderr_read, stderr_write) = make_pipe();
+
+                                    //TODO: kill the child
+                                    child = debugger.start(Some(|| {
+                                        // Redirect the stderr to the pipe
+                                        //TODO: do other streams
+                                        let res = unsafe { libc::dup2(stderr_write, libc::STDERR_FILENO) };
+                                        assert_ne!(res, -1);
+                                    }));
 
                                     breakpoints_pending_reinstall.clear();
 
