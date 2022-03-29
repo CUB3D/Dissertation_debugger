@@ -8,7 +8,7 @@ edition = "2021"
 [dependencies]
 libc = "0.2.121"
 crossbeam-channel = "0.5.1"
-exe = "0.4.5"
+exe = "0.5.1"
 goblin = { version = "0.5.1", default-features=false, features=["endian_fd", "elf32", "elf64", "std", "mach64"]}
 linux_memory_map = { path = "../linux_memory_map" }
 linux_fd_info = { path = "../linux_fd_info" }
