@@ -31,7 +31,7 @@ pub struct arm_thread_state64 {
     pub flags: u32,
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Hash, Default)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash, Default)]
 pub struct Process(pub i32);
 
 impl Process {

@@ -23,6 +23,7 @@ use crate::UserRegs;
 
 /// The current state of a process or thread
 /// While windows conceptually has a difference between threads and processes, linux does not so for simplicity we merge these concepts together
+#[derive(Debug, Eq, PartialEq)]
 pub struct ProcessState {
     /// A reference to the process being debugged,
     /// this *may* actually be a reference to either a process of a thread on windows
@@ -66,7 +67,7 @@ impl ProcessState {
     }
 }
 
-#[derive(Copy, Clone, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum DebuggerStatus {
     NoBinaryYet,
     ReadyToStart,
