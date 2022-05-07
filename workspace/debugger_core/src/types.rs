@@ -2,7 +2,7 @@ pub use linux_memory_map::*;
 #[cfg(target_os = "linux")]
 pub use ptrace::types::UserRegs;
 #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
-#[derive(Default, Debug, Copy, Clone)]
+#[derive(Default, Debug, Copy, Clone, Eq, PartialEq)]
 pub struct UserRegs {
     pub regs: [u64; 31],
     pub sp: u64,
@@ -10,7 +10,7 @@ pub struct UserRegs {
     pub pstate: u64,
 }
 #[cfg(all(target_os = "macos", target_arch = "x86_64"))]
-#[derive(Default, Debug, Copy, Clone)]
+#[derive(Default, Debug, Copy, Clone, Eq, PartialEq)]
 pub struct UserRegs {
     pub r15: libc::c_ulonglong,
     pub r14: libc::c_ulonglong,
@@ -42,7 +42,7 @@ pub struct UserRegs {
 }
 
 /// A syscall argument
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum SyscallArg {
     /// A path to a file
     FilePath(String),
@@ -59,7 +59,7 @@ pub enum SyscallArg {
 }
 
 /// A syscall invocation
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Syscall {
     /// The name of the syscall that was executed
     pub name: String,
@@ -67,9 +67,9 @@ pub struct Syscall {
     pub args: Vec<SyscallArg>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CallStack(pub Vec<StackFrame>);
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct StackFrame {
     pub addr: usize,
     pub description: String,

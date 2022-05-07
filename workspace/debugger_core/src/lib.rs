@@ -37,8 +37,11 @@ pub use mac_debugging_client::DarwinDebuggingClient as NativeDebuggingClient;
 #[cfg(target_os = "windows")]
 pub use windows_debugging_client::WindowsNTDebuggingClient as NativeDebuggingClient;
 
+#[cfg(test)]
+pub mod test_debugger_state;
+
 #[cfg(not(target_os = "linux"))]
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct Breakpoint {
     pub address: usize,
 }
@@ -49,7 +52,7 @@ impl Breakpoint {
     }
 }
 #[cfg(not(target_os = "linux"))]
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct FpRegs {
     pub ftw: libc::c_ushort,
     pub st_space: [libc::c_uint; 32],
@@ -62,7 +65,7 @@ pub struct Process(pub i32);
 pub use crate::mac_debugging_client::Process;
 
 /// Messages send from the ui to the debugging client
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Msg {
     /// Resume executing the binary
     Continue,
