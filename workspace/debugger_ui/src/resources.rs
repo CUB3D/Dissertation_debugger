@@ -64,7 +64,7 @@ impl InnerRender for WidgetResources {
                                 TableColumnSetup::new("Pipeid"),
                             ],
                         ) {
-                            for (fd, info, path) in pipes {
+                            for (fd, _info, path) in pipes {
                                 ui.table_next_column();
                                 ui.text(format!("{}", fd));
                                 ui.table_next_column();
@@ -82,7 +82,7 @@ impl InnerRender for WidgetResources {
                                 TableColumnSetup::new("SocketId"),
                             ],
                         ) {
-                            for (fd, info, path) in sockets {
+                            for (fd, _info, path) in sockets {
                                 ui.table_next_column();
                                 ui.text(format!("{}", fd));
                                 ui.table_next_column();
