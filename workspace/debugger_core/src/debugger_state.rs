@@ -139,7 +139,7 @@ impl DebuggerState {
 
         // Try loading file as a macho (macos)
         if self.elf.is_none() {
-            if let Ok(gmacho) = goblin::mach::MachO::parse(&binary_content, 0) {
+            if let Ok(_gmacho) = goblin::mach::MachO::parse(&binary_content, 0) {
                 self.elf = Some(BinaryFile::MachO);
             } else {
                 println!("Failed to load macho");

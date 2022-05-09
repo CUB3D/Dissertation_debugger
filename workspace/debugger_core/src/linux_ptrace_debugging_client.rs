@@ -13,7 +13,7 @@ use ptrace::{Process};
 use std::iter::Iterator;
 use std::ops::Range;
 use std::sync::{Arc, RwLock};
-use libc::F_SETFL;
+
 
 
 use crate::types::{MemoryMap, MemoryMapEntry, MemoryMapEntryPermissions};
@@ -346,8 +346,8 @@ impl DebuggingClient for LinuxPtraceDebuggingClient {
             }
 
             let (mut stderr_read, mut stderr_write) = make_pipe();
-            let (mut stdout_read, mut stdout_write) = make_pipe();
-            let (mut stdin_read, mut stdin_write) = make_pipe();
+            let (stdout_read, stdout_write) = make_pipe();
+            let (stdin_read, stdin_write) = make_pipe();
             make_non_blocking(stderr_read);
             make_non_blocking(stdout_read);
             make_non_blocking(stdin_read);
