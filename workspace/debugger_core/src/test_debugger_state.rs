@@ -243,7 +243,14 @@ pub fn when_message_userregs_recieved_then_content_should_be_added() {
     ds.process_state.push(ProcessState::with_process(Process(1234)));
 
     let mut user_regs = unsafe { Box::<UserRegs>::new_zeroed().assume_init() };
-    user_regs.pc = 0x12345;
+    #[cfg(target_arch = "aarch64")]
+        {
+            user_regs.pc = 0x12345;
+        }
+    #[cfg(target_arch = "x86_64")]
+        {
+            user_regs.ip = 0x12345;
+        }
 
     sender.send(DebuggerMsg::UserRegisters(Process(1234), user_regs.clone()));
     ds.process_incoming_message();
