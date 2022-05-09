@@ -1,6 +1,6 @@
 use crossbeam_channel::bounded;
 use linux_memory_map::{MemoryMap, MemoryMapEntry, MemoryMapEntryPermissions, MemoryMapEntryPermissionsKind};
-use crate::{Breakpoint, DebuggerMsg, DebuggerState, DebuggerStatus, Msg, Process, ProcessState, Syscall, SyscallArg};
+use crate::{Breakpoint, CallStack, DebuggerMsg, DebuggerState, DebuggerStatus, FpRegs, Msg, Process, ProcessState, StackFrame, Syscall, SyscallArg, UserRegs};
 
 #[test]
 pub fn when_message_stop_is_sent_then_stop_should_be_received() {
@@ -202,20 +202,151 @@ pub fn when_message_mmap_recieved_then_mmap_should_be_added() {
     }])));
 }
 
-/*
-ProcessSpawn(Process),
-    /// The given process has died with the given status
-    ProcessDeath(Process, isize),
-    /// The process has stopped, we have a new call stack to display
-    CallStack(Process, CallStack),
-    /// The given process has received new user registers
-    UserRegisters(Process, Box<UserRegs>),
-    /// The given process has received new floating point registers
-    FpRegisters(Process, Box<FpRegs>),
-    /// The given process has new memory state
-    Memory(Process, Vec<(Vec<u8>, Range<usize>)>),
-    /// The given process has new data in stderr
-    StdErrContent(Process, Vec<u8>),
-    /// The given process has new data in stdout
-    StdOutContent(Process, Vec<u8>),
- */
+#[test]
+pub fn when_message_stdout_recieved_then_content_should_be_added() {
+    let (sender, reciever) = bounded(1);
+
+    let mut ds = DebuggerState::default();
+    ds.reciever = Some(reciever);
+    ds.process_state.push(ProcessState::with_process(Process(1234)));
+
+    sender.send(DebuggerMsg::StdOutContent(Process(1234), "Test\n".to_string().into_bytes()));
+    ds.process_incoming_message();
+    sender.send(DebuggerMsg::StdOutContent(Process(1234), "Test\n".to_string().into_bytes()));
+    ds.process_incoming_message();
+
+    assert_eq!(ds.process_state.first().unwrap().stdout, "Test\nTest\n".to_string());
+}
+
+#[test]
+pub fn when_message_stderr_recieved_then_content_should_be_added() {
+    let (sender, reciever) = bounded(1);
+
+    let mut ds = DebuggerState::default();
+    ds.reciever = Some(reciever);
+    ds.process_state.push(ProcessState::with_process(Process(1234)));
+
+    sender.send(DebuggerMsg::StdErrContent(Process(1234), "Test\n".to_string().into_bytes()));
+    ds.process_incoming_message();
+    sender.send(DebuggerMsg::StdErrContent(Process(1234), "Test\n".to_string().into_bytes()));
+    ds.process_incoming_message();
+
+    assert_eq!(ds.process_state.first().unwrap().stderr, "Test\nTest\n".to_string());
+}
+
+#[test]
+pub fn when_message_userregs_recieved_then_content_should_be_added() {
+    let (sender, reciever) = bounded(1);
+
+    let mut ds = DebuggerState::default();
+    ds.reciever = Some(reciever);
+    ds.process_state.push(ProcessState::with_process(Process(1234)));
+
+    let mut user_regs = unsafe { Box::<UserRegs>::new_zeroed().assume_init() };
+    user_regs.pc = 0x12345;
+
+    sender.send(DebuggerMsg::UserRegisters(Process(1234), user_regs.clone()));
+    ds.process_incoming_message();
+
+    assert_eq!(ds.process_state.first().unwrap().cache_user_regs, Some(user_regs));
+}
+
+#[test]
+pub fn when_message_fpregs_recieved_then_content_should_be_added() {
+    let (sender, reciever) = bounded(1);
+
+    let mut ds = DebuggerState::default();
+    ds.reciever = Some(reciever);
+    ds.process_state.push(ProcessState::with_process(Process(1234)));
+
+    let mut fp_regs = unsafe { Box::<FpRegs>::new_zeroed().assume_init() };
+    fp_regs.ftw = 0x1234;
+
+    sender.send(DebuggerMsg::FpRegisters(Process(1234), fp_regs.clone()));
+    ds.process_incoming_message();
+
+    assert_eq!(ds.process_state.first().unwrap().cache_fp_regs, Some(fp_regs));
+}
+
+#[test]
+pub fn when_message_callstack_recieved_then_content_should_be_added() {
+    let (sender, reciever) = bounded(1);
+
+    let mut ds = DebuggerState::default();
+    ds.reciever = Some(reciever);
+    ds.process_state.push(ProcessState::with_process(Process(1234)));
+
+    let cs = CallStack(vec![StackFrame {
+        addr: 0x12345,
+        description: "Test123".to_string()
+    }]);
+
+    sender.send(DebuggerMsg::CallStack(Process(1234), cs.clone()));
+    ds.process_incoming_message();
+
+    assert_eq!(ds.process_state.first().unwrap().call_stack, Some(cs));
+}
+
+#[test]
+pub fn when_message_memory_recieved_then_content_should_be_added() {
+    let (sender, reciever) = bounded(1);
+
+    let mut ds = DebuggerState::default();
+    ds.reciever = Some(reciever);
+    ds.process_state.push(ProcessState::with_process(Process(1234)));
+
+    let mem = vec![(vec![1, 2, 3, 4], 0..4)];
+
+    sender.send(DebuggerMsg::Memory(Process(1234), mem.clone()));
+    ds.process_incoming_message();
+
+    assert_eq!(ds.process_state.first().unwrap().memory, mem);
+}
+
+#[test]
+pub fn when_message_spawn_recieved_then_process_should_be_added() {
+    let (sender, reciever) = bounded(1);
+
+    let mut ds = DebuggerState::default();
+    ds.reciever = Some(reciever);
+
+    sender.send(DebuggerMsg::ProcessSpawn(Process(1234)));
+    ds.process_incoming_message();
+
+    assert_eq!(ds.process_state.first().unwrap(), &ProcessState::with_process(Process(1234)));
+}
+
+#[test]
+pub fn when_message_death_of_first_proc_recieved_then_process_should_be_removed_and_status_dead() {
+    let (sender, reciever) = bounded(1);
+
+    let mut ds = DebuggerState::default();
+    ds.reciever = Some(reciever);
+
+    sender.send(DebuggerMsg::ProcessSpawn(Process(1234)));
+    ds.process_incoming_message();
+    sender.send(DebuggerMsg::ProcessDeath(Process(1234), 0));
+    ds.process_incoming_message();
+
+    assert_eq!(ds.process_state.first().unwrap().alive, false);
+    assert_eq!(ds.status, DebuggerStatus::Dead);
+}
+
+#[test]
+pub fn when_message_death_of_other_proc_recieved_then_process_should_be_removed_and_status_not_dead() {
+    let (sender, reciever) = bounded(1);
+
+    let mut ds = DebuggerState::default();
+    ds.reciever = Some(reciever);
+
+    sender.send(DebuggerMsg::ProcessSpawn(Process(1234)));
+    ds.process_incoming_message();
+    sender.send(DebuggerMsg::ChildProcessSpawn(Process(5678)));
+    ds.process_incoming_message();
+    sender.send(DebuggerMsg::ProcessDeath(Process(5678), 0));
+    ds.process_incoming_message();
+
+    assert_eq!(ds.process_state.first().unwrap(), &ProcessState::with_process(Process(1234)));
+    assert_eq!(ds.process_state.iter().nth(1).unwrap().alive, false);
+    assert_ne!(ds.status, DebuggerStatus::Dead);
+}
