@@ -139,6 +139,8 @@ impl LinuxPtraceDebuggingClient {
                     .iter()
                     .map(|mp| MemoryMapEntry {
                         path: mp.path.clone(),
+                        offset: mp.offset.clone(),
+                        dev: mp.dev.clone(),
                         range: mp.range.clone(),
                         permissions: MemoryMapEntryPermissions {
                             read: mp.permissions.read,
@@ -153,6 +155,7 @@ impl LinuxPtraceDebuggingClient {
                                 }
                             },
                         },
+                        inode: mp.inode.clone()
                     })
                     .collect(),
             );

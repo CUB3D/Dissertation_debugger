@@ -73,7 +73,7 @@ pub struct FpRegs {
 }
 
 /// Representation of the return value of waitpid (2)
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct WaitStatus(pub i32);
 impl WaitStatus {
     pub fn wstatus(&self) -> i32 {

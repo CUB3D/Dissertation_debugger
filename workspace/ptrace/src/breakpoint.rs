@@ -1,7 +1,7 @@
 use crate::Process;
 
 /// Represent a single breakpoint
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct Breakpoint {
     #[cfg(target_arch = "x86_64")]
     /// The original value of the byte that this breakpoint replaced, None if the value is missing
