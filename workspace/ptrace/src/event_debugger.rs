@@ -26,9 +26,9 @@ pub struct EventDrivenPtraceDebugger {
 }
 
 impl EventDrivenPtraceDebugger {
-    pub fn new(binary: &str, proc_name: &str, arg: &str) -> Self {
+    pub fn new<T: AsRef<str>>(binary: &str, proc_name: &str, arg: &[T]) -> Self {
         Self {
-            debugger: Ptrace::new(binary, proc_name, &[arg]).expect("Failed to start debugger"),
+            debugger: Ptrace::new(binary, proc_name, arg).expect("Failed to start debugger"),
             in_syscall: Default::default(),
             processes: Default::default(),
             breakpoints: Default::default(),

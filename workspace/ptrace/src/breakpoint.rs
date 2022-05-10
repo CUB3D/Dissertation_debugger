@@ -5,10 +5,10 @@ use crate::Process;
 pub struct Breakpoint {
     #[cfg(target_arch = "x86_64")]
     /// The original value of the byte that this breakpoint replaced, None if the value is missing
-    original_byte: Option<u8>,
+    pub original_byte: Option<u8>,
     #[cfg(target_arch = "aarch64")]
     /// The original value of the bytes that this breakpoint replaced, None if the value is missing
-    original_byte: Option<u32>,
+    pub original_byte: Option<u32>,
     /// The address this breakpoint is attached to
     pub address: usize,
 }

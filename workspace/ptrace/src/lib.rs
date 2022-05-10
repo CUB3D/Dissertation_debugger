@@ -60,11 +60,12 @@ mod linux_ptrace {
 
     impl Ptrace {
         /// Create a new instance of `Ptrace`
-        pub fn new(process: &str, process_name: &str, args: &[&str]) -> PTraceResult<Self> {
+        pub fn new<T: AsRef<str>>(process: &str, process_name: &str, args: &[T]) -> PTraceResult<Self> {
             let mut cargs = Vec::new();
             cargs.push(CString::new(process_name)?);
             for a in args {
-                cargs.push(CString::new(*a)?);
+                let a: &str = a.as_ref();
+                cargs.push(CString::new(a)?);
             }
 
             Ok(Self {
