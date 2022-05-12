@@ -116,7 +116,7 @@ impl EventDrivenPtraceDebugger {
                                 .iter_mut()
                                 .find(|bp| bp.address == user_regs.pc as usize)
                                 .expect("Hit a breakpoint, but we can't find it to uninstall");
-                            bp.uninstall(pid);
+                            assert_eq!(bp.uninstall(pid), true, "Failed to uninstall bp");
 
                             return (pid, PtraceEvent::BreakpointHit(*bp));
                         } else {
@@ -161,5 +161,11 @@ impl EventDrivenPtraceDebugger {
         } else {
             panic!("child !stopped");
         }
+    }
+
+    pub fn install_breakpoint(&mut self, bp: &mut Breakpoint) -> bool {
+        let status = bp.install(*self.processes.first().unwrap());
+        self.breakpoints.push(*bp);
+        status
     }
 }

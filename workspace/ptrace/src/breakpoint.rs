@@ -59,7 +59,7 @@ impl Breakpoint {
             // Get the original instruction
             return if let Some(original_instruction) = child.ptrace_peektext_safe(self.address) {
                 // Save the original byte
-                self.original_byte = Some((original_instruction & 0xFFFFFF) as u32);
+                self.original_byte = Some((original_instruction & 0xFFFF_FFFF) as u32);
                 // Path the instruction
                 let patched_instruction = (original_instruction & 0xFFFF_FFFF_0000_0000u64) | 0xD4200000;
                 // Write the patched instruction to the text section

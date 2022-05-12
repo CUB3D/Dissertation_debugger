@@ -115,12 +115,13 @@ impl Process {
     #[cfg(target_arch = "aarch64")]
     /// Get the user registers of the process
     pub fn ptrace_setregs(&self, regs: &mut Box<UserRegs>) {
-        let mut iovec = unsafe { Box::<libc::iovec>::new_zeroed().assume_init() };
-        iovec.iov_base = regs.as_mut() as *mut UserRegs as *mut _;
-        iovec.iov_len = core::mem::size_of::<UserRegs>();
+        let mut iovec = libc::iovec {
+            iov_base: regs.as_mut() as *mut UserRegs as *mut libc::c_void,
+            iov_len: core::mem::size_of::<UserRegs>()
+        };
 
-        /*assert_ne!(-1, */
-        unsafe { libc::ptrace(libc::PTRACE_SETREGSET, self.0, libc::NT_PRSTATUS, iovec.as_mut() as *mut _) }; /*);*/
+        assert_ne!(-1,
+        unsafe { libc::ptrace(libc::PTRACE_SETREGSET, self.0, libc::NT_PRSTATUS, &mut iovec as *mut libc::iovec as *mut libc::c_void) } );
     }
 
     #[cfg(target_arch = "x86_64")]
