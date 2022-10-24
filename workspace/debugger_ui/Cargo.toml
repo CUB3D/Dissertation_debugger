@@ -20,7 +20,7 @@ clap = "3.1.6"
 gimli = "0.26.1"
 fallible-iterator = "0.2.0"
 crossbeam-channel = "0.5.1"
-goblin = { version = "0.5.1", default-features=false, features=["endian_fd", "elf32", "elf64", "std"]}
+goblin = { version = "0.6.0", default-features=false, features=["endian_fd", "elf32", "elf64", "std"]}
 
 debugger_core = { path = "../debugger_core" }
 linux_fd_info = { path = "../linux_fd_info" }
