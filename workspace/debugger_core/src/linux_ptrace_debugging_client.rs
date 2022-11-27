@@ -326,7 +326,7 @@ impl DebuggingClient for LinuxPtraceDebuggingClient {
         std::thread::spawn(move || {
             let farg = args.first().map(|s| s.clone()).unwrap_or("".to_string());
 
-            let mut debugger = EventDrivenPtraceDebugger::new(&binary_path, "Debuggee", &farg);
+            let mut debugger = EventDrivenPtraceDebugger::new(&binary_path, "Debuggee", &[farg]);
 
             /// Create a new pipe, returning (readfd, writefd)
             /// Just a nice wrapper around pipe(2)
